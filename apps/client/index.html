@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="referrer" content="no-referrer" />
+    <!-- Fixed title/icon: the remote page's title/url must never leak into
+         the local browser's history or tab. -->
+    <title>Viewer</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Login -->
+    <section id="login" class="login">
+      <form id="login-form" class="login-box" autocomplete="off">
+        <h1>Viewer</h1>
+        <p class="muted">비밀번호로 로그인</p>
+        <input
+          id="password"
+          type="password"
+          placeholder="비밀번호"
+          autocomplete="off"
+          spellcheck="false"
+          autocapitalize="off"
+        />
+        <button id="login-btn" type="submit">연결</button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </section>
+
+    <!-- Browser -->
+    <section id="app" class="app hidden">
+      <div id="tabbar" class="tabbar"></div>
+      <div class="toolbar">
+        <button id="back" class="icon" title="뒤로">◀</button>
+        <button id="forward" class="icon" title="앞으로">▶</button>
+        <button id="reload" class="icon" title="새로고침">⟳</button>
+        <input
+          id="address"
+          class="address"
+          type="text"
+          placeholder="주소 또는 검색어"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          enterkeyhint="go"
+        />
+        <button id="newtab" class="icon" title="새 탭">＋</button>
+        <button id="burn" class="icon danger" title="세션 파기">🔥</button>
+      </div>
+      <div id="progress" class="progress hidden"></div>
+      <div class="stage">
+        <canvas id="screen" class="screen" tabindex="0"></canvas>
+        <!-- hidden input sink: captures physical keyboard + IME + on-screen kbd -->
+        <textarea
+          id="sink"
+          class="sink"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+        ></textarea>
+      </div>
+    </section>
+
+    <!-- Dialog modal -->
+    <div id="dialog" class="dialog-overlay hidden">
+      <div class="dialog-box">
+        <p id="dialog-msg" class="dialog-msg"></p>
+        <input id="dialog-input" class="dialog-input hidden" type="text" autocomplete="off" />
+        <div class="dialog-actions">
+          <button id="dialog-cancel" class="secondary">취소</button>
+          <button id="dialog-ok">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

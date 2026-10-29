@@ -1,0 +1,7 @@
+# Auto HTTPS for your domain. Caddy obtains and renews a Let's Encrypt cert
+# automatically. No access logs are configured (none by default), keeping the
+# server side free of a visited-URL trail.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8080
+}

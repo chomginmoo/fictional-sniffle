@@ -1,0 +1,269 @@
+// session.js — one logged-in user session: a Chromium browser, its context,
+// a set of tabs, and the WebSocket currently attached to it.
+//
+// Single-user design: there is at most one active session. A new login
+// replaces the old one. On socket loss the session is kept alive for a short
+// grace window so a flaky connection can resume without losing tabs.
+import { launchBrowser, newContext } from "./browser.js";
+import { Tab } from "./tab.js";
+import { navigationAllowed, startPage } from "./urlPolicy.js";
+import { encodeFrameHeader } from "./protocol.js";
+
+const IDLE_MS = Number(process.env.IDLE_MS || 15 * 60_000);
+const GRACE_MS = Number(process.env.GRACE_MS || 60_000);
+const SEND_HIGH_WATER = 512 * 1024; // drop frames while socket is this far behind
+
+export class Session {
+  constructor() {
+    this.browser = null;
+    this.context = null;
+    this.tabs = new Map();
+    this.activeId = null;
+    this.nextTabId = 1;
+    this.ws = null;
+    this.dialogs = new Map();
+    this.nextDialogId = 1;
+    this.width = 1280;
+    this.height = 720;
+    this.idleTimer = null;
+    this.graceTimer = null;
+    this.dead = false;
+  }
+
+  async start() {
+    this.browser = await launchBrowser();
+    this.context = await newContext(this.browser, {
+      width: this.width,
+      height: this.height,
+    });
+
+    // Defense-in-depth SSRF guard on every request (firewall is primary).
+    await this.context.route("**/*", (route) => {
+      const url = route.request().url();
+      if (!navigationAllowed(url)) return route.abort("blockedbyclient");
+      return route.continue();
+    });
+
+    const tab = await this._makeTab();
+    this.activeId = tab.id;
+    await tab.setViewport(this.width, this.height);
+    await tab.startCast();
+    await tab.navigate(startPage);
+    this.resetIdle();
+  }
+
+  async _makeTab(page) {
+    const p = page || (await this.context.newPage());
+    const tab = new Tab(this.nextTabId++, p, this);
+    await tab.init();
+    tab.page.on("popup", (pop) => this.adoptPopup(pop));
+    this.tabs.set(tab.id, tab);
+    return tab;
+  }
+
+  async adoptPopup(page) {
+    const tab = await this._makeTab(page);
+    await this.switchTab(tab.id);
+    this.emitTabs();
+  }
+
+  bindSocket(ws) {
+    if (this.graceTimer) {
+      clearTimeout(this.graceTimer);
+      this.graceTimer = null;
+    }
+    this.ws = ws;
+  }
+
+  unbindSocket(ws) {
+    if (this.ws !== ws) return;
+    this.ws = null;
+    if (this.dead) return;
+    this.graceTimer = setTimeout(() => this.burn("grace-timeout"), GRACE_MS);
+  }
+
+  send(obj) {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== ws.OPEN) return;
+    try {
+      ws.send(JSON.stringify(obj));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  sendFrame(tabId, seq, w, h, bytes) {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== ws.OPEN) return;
+    if (ws.bufferedAmount > SEND_HIGH_WATER) return; // backpressure: drop frame
+    try {
+      ws.send(Buffer.concat([encodeFrameHeader(tabId, seq, w, h), bytes]), {
+        binary: true,
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  resetIdle() {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      this.send({ t: "bye", reason: "idle" });
+      this.burn("idle");
+    }, IDLE_MS);
+  }
+
+  get active() {
+    return this.tabs.get(this.activeId) || null;
+  }
+
+  emitTabs() {
+    const list = [];
+    for (const t of this.tabs.values()) {
+      list.push({ id: t.id, title: t._title || "", active: t.id === this.activeId });
+    }
+    this.send({ t: "tabs", list });
+  }
+
+  async setViewport(w, h) {
+    this.width = w;
+    this.height = h;
+    const a = this.active;
+    if (a) await a.setViewport(w, h);
+  }
+
+  async newTab() {
+    const tab = await this._makeTab();
+    await this.switchTab(tab.id);
+    await tab.navigate(startPage);
+    this.emitTabs();
+  }
+
+  async switchTab(id) {
+    const next = this.tabs.get(id);
+    if (!next) return;
+    const prev = this.active;
+    if (prev && prev.id !== id) await prev.stopCast();
+    this.activeId = id;
+    await next.setViewport(this.width, this.height);
+    await next.startCast();
+    next.emitState();
+    this.emitTabs();
+  }
+
+  async closeTab(id) {
+    const tab = this.tabs.get(id);
+    if (!tab) return;
+    await tab.close();
+    this.tabs.delete(id);
+    if (this.activeId === id) {
+      const first = this.tabs.keys().next().value;
+      if (first) await this.switchTab(first);
+      else {
+        this.send({ t: "bye", reason: "no-tabs" });
+        await this.burn("no-tabs");
+      }
+    } else {
+      this.emitTabs();
+    }
+  }
+
+  onTabClosed(id) {
+    if (!this.tabs.has(id)) return;
+    this.tabs.delete(id);
+    if (this.activeId === id) {
+      const first = this.tabs.keys().next().value;
+      if (first) this.switchTab(first).catch(() => {});
+      else this.burn("no-tabs");
+    } else {
+      this.emitTabs();
+    }
+  }
+
+  registerDialog(dialog) {
+    const id = this.nextDialogId++;
+    this.dialogs.set(id, dialog);
+    return id;
+  }
+
+  async respondDialog(id, accept, text) {
+    const d = this.dialogs.get(id);
+    if (!d) return;
+    this.dialogs.delete(id);
+    try {
+      if (accept) await d.accept(text || undefined);
+      else await d.dismiss();
+    } catch {
+      /* already handled */
+    }
+  }
+
+  // Route a validated client message to the active tab / session actions.
+  async handle(m) {
+    this.resetIdle();
+    switch (m.t) {
+      case "resize":
+        await this.setViewport(m.w, m.h);
+        break;
+      case "go":
+        if (this.active) await this.active.navigate(m.input);
+        break;
+      case "nav":
+        if (this.active) await this.active.nav(m.op);
+        break;
+      case "mouse":
+      case "wheel":
+      case "key":
+      case "ime":
+      case "text":
+        if (this.active) await this.active.input(m);
+        break;
+      case "tab":
+        if (m.op === "new") await this.newTab();
+        else if (m.op === "close") await this.closeTab(m.id ?? this.activeId);
+        else if (m.op === "switch" && m.id != null) await this.switchTab(m.id);
+        break;
+      case "dialog":
+        await this.respondDialog(m.id, m.accept, m.text);
+        break;
+      case "ack":
+        break; // frame acks are advisory; bufferedAmount is the real signal
+      case "ping":
+        this.send({ t: "pong" });
+        break;
+      case "burn":
+        this.send({ t: "bye", reason: "burned" });
+        await this.burn("user-burn");
+        break;
+    }
+  }
+
+  async burn(reason) {
+    if (this.dead) return;
+    this.dead = true;
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    if (this.graceTimer) clearTimeout(this.graceTimer);
+    for (const t of this.tabs.values()) {
+      try {
+        await t.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.tabs.clear();
+    try {
+      if (this.context) await this.context.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (this.browser) await this.browser.close();
+    } catch {
+      /* ignore */
+    }
+    this.browser = null;
+    this.context = null;
+    // tell index.js to forget us
+    if (this.onDead) this.onDead(reason);
+  }
+}

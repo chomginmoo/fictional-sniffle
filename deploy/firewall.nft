@@ -1,0 +1,28 @@
+#!/usr/sbin/nft -f
+# Egress SSRF hardening for the render server host (run on the VM, not in the
+# container). This is the PRIMARY defense against the server-side browser being
+# tricked into reaching internal/cloud-metadata addresses (urlPolicy.js is only
+# a secondary string check and cannot stop DNS rebinding).
+#
+#   sudo nft -f deploy/firewall.nft
+#
+# Adjust the uid/match to the user Chromium runs as if you isolate it further.
+
+table inet rbi_egress {
+	chain output {
+		type filter hook output priority 0; policy accept;
+
+		# Block cloud instance metadata (credential theft vector).
+		ip daddr 169.254.169.254 drop
+		ip6 daddr fe80::/10 drop
+
+		# Block RFC1918 / private ranges for outbound browser traffic.
+		ip daddr 10.0.0.0/8 drop
+		ip daddr 172.16.0.0/12 drop
+		ip daddr 192.168.0.0/16 drop
+		ip daddr 127.0.0.0/8 ip daddr != 127.0.0.1 drop
+
+		# Block IPv6 unique-local.
+		ip6 daddr fc00::/7 drop
+	}
+}

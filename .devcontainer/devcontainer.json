@@ -1,0 +1,24 @@
+{
+  "name": "private-browser",
+  "image": "mcr.microsoft.com/playwright:v1.47.0-jammy",
+  "features": {},
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "render-server",
+      "visibility": "private",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "cd apps/server && npm install",
+  "remoteEnv": {
+    "APP_PASSWORD": "change-me-in-codespaces-secrets",
+    "HEADLESS": "true",
+    "CHROMIUM_SANDBOX": "false"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint"]
+    }
+  }
+}

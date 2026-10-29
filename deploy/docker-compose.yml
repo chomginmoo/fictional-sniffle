@@ -1,0 +1,51 @@
+# Production stack for the always-on home setup (e.g. Oracle Cloud free VM).
+# Caddy terminates TLS (auto Let's Encrypt) and proxies wss to the app.
+#
+#   DOMAIN=my.duckdns.org APP_PASSWORD=... docker compose up -d
+#
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD}
+      ALLOWED_ORIGINS: https://${DOMAIN}
+      HEADLESS: "true"
+      TZ: Asia/Seoul
+      LOCALE: ko-KR
+      # The Chromium sandbox needs extra container privileges to start. Default
+      # here is off so it runs anywhere; to turn it ON (recommended), either add
+      #   cap_add: [SYS_ADMIN]
+      # below, or run with a Chrome seccomp profile, then set this to "true".
+      CHROMIUM_SANDBOX: "${CHROMIUM_SANDBOX:-false}"
+    # Chromium needs shared memory and a writable /tmp (we point it there with
+    # --disable-dev-shm-usage). Keep both in RAM so nothing hits disk.
+    shm_size: "1gb"
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    # expose only to caddy, not to the host network
+    expose:
+      - "8080"
+
+volumes:
+  caddy_data:
+  caddy_config:

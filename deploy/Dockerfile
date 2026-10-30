@@ -2,12 +2,10 @@
 # Chromium + all system libraries (and Korean fonts, added below) are present.
 FROM mcr.microsoft.com/playwright:v1.47.0-jammy
 
-# Korean (and CJK) fonts so Hangul doesn't render as tofu boxes, plus the
-# video-mode toolchain (STREAM_MODE=video, video-only): Xvfb display + ffmpeg.
+# Korean (and CJK) fonts so Hangul doesn't render as tofu boxes.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        fonts-noto-cjk fonts-noto-color-emoji \
-       xvfb ffmpeg matchbox-window-manager \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

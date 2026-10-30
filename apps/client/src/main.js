@@ -10,12 +10,11 @@ import { attachIme } from "./input/ime.js";
 const privacy = setupPrivacy();
 ui.init();
 const canvas = document.getElementById("screen");
-const videoEl = document.getElementById("screenv");
 const stage = document.getElementById("stage");
 const sink = document.getElementById("sink");
-viewer.init(canvas, videoEl);
+viewer.init(canvas);
 
-// attach input handlers once, to the stage (works for canvas or video surface)
+// attach input handlers once
 attachMouse(stage, sink);
 attachKeyboard(sink);
 attachIme(sink);
@@ -26,14 +25,7 @@ conn.setHandlers({
       case "hello":
         ui.showBrowser();
         privacy.setConnected(true);
-        if (m.mode === "video") {
-          ui.setVideoMode(true);
-          viewer.setStatusHandler((msg) => msg && ui.toast(msg));
-          viewer.initVideo({ width: m.width, height: m.height, codec: m.codec });
-        } else {
-          ui.setVideoMode(false);
-          ui.applyPerf(); // sends perf (quality/fps) + scale + initial resize
-        }
+        ui.applyPerf(); // sends perf (quality/fps) + scale + initial resize
         ui.focusSink();
         break;
       case "state":
@@ -62,10 +54,7 @@ conn.setHandlers({
     }
   },
   onBinary(buf) {
-    // first byte is the stream type: 1 = JPEG frame, 2 = video (fMP4) chunk
-    const type = new Uint8Array(buf, 0, 1)[0];
-    if (type === 2) viewer.onVideoChunk(buf.slice(1));
-    else viewer.onFrame(buf);
+    viewer.onFrame(buf);
   },
   onAuthError(msg) {
     privacy.setConnected(false);

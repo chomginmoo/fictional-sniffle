@@ -83,8 +83,9 @@ export class Tab {
 
   _scheduleState() {
     if (this._stateTimer) return;
-    this._stateTimer = setTimeout(() => {
+    this._stateTimer = setTimeout(async () => {
       this._stateTimer = null;
+      await this._refreshNav(); // keep back/forward accurate on link clicks too
       this.emitState();
     }, 60);
   }
@@ -116,7 +117,6 @@ export class Tab {
 
   async startCast() {
     if (!this.cdp) return;
-    if (this.session.video) return; // video mode captures via ffmpeg, not screencast
     // If already casting (e.g. a quality/viewport change), restart so Chromium
     // emits a fresh frame with the new settings instead of silently ignoring
     // the second start.
@@ -185,15 +185,12 @@ export class Tab {
   }
 
   async _refreshNav() {
-    // Best-effort back/forward availability via history length + position.
+    // Accurate back/forward state straight from the navigation history (no
+    // page.evaluate round-trip; forward button now works too).
     try {
-      const [len, idx] = await this.page.evaluate(() => [
-        history.length,
-        // not directly available; approximate
-        0,
-      ]);
-      this._canBack = len > 1;
-      this._canFwd = false; // forward state is hard to detect reliably; left false
+      const { currentIndex, entries } = await this.cdp.send("Page.getNavigationHistory");
+      this._canBack = currentIndex > 0;
+      this._canFwd = currentIndex < entries.length - 1;
     } catch {
       this._canBack = false;
       this._canFwd = false;

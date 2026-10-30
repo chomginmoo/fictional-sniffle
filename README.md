@@ -142,37 +142,16 @@ DOMAIN=my.duckdns.org APP_PASSWORD='강한-비밀번호' docker compose up -d
   한 장 보냅니다. Chromium `--enable-smooth-scrolling`으로 스크롤 자체도 애니메이션돼 더 매끄럽습니다.
 - 서버 기본값은 `JPEG_QUALITY`(60)·`MAX_FPS`(24)·`MOTION_QUALITY`(35)·`SEND_HIGH_WATER`로 조정할 수 있습니다.
 
-## 영상 모드 (실험적, `STREAM_MODE=video`, 영상 전용)
-
-기본은 JPEG 프레임 모드예요. **`STREAM_MODE=video`**로 켜면 스트리밍 방식이 바뀝니다:
-
-- 헤드풀 Chromium을 **가상 디스플레이(Xvfb)** 위에서 실행하고, **ffmpeg**로 화면을
-  **H.264(Annex-B)**로 인코딩 → 브라우저가 **WebCodecs로 디코딩해 캔버스에 그림**
-  (JPEG 모드와 같은 캔버스 경로; `<video>`/`blob:` 미사용). **소리는 없어요(영상 전용).**
-- **부드러운 영상**이 돼요(유튜브 등 화면). 입력은 그대로 CDP로 주입.
-- 필요 패키지: `xvfb ffmpeg matchbox-window-manager` (devcontainer/Docker에 포함).
-
-실행 예 (Codespace 터미널):
-```bash
-cd apps/server
-STREAM_MODE=video APP_PASSWORD=비번 CHROMIUM_SANDBOX=false node src/index.js
-```
-
-문제 진단: 화면이 검으면 앱이 토스트로 원인을 알려줘요 — "영상 데이터가 오지 않습니다"(서버
-ffmpeg/Xvfb 문제), "코덱 미지원", "버퍼/디코딩 오류" 등.
-
-주의/한계(v1):
-- **CPU를 많이 써요.** Codespaces 2코어에선 버벅일 수 있고, 코어가 넉넉한 호스트(Oracle VM 등)에서 제대로 나와요.
-- 해상도가 **1280×720 고정**이고(동적 리사이즈 없음), 상호작용엔 약간의 **지연**이 있어요(영상 코덱 특성).
-- 환경 변수: `VIDEO_W`/`VIDEO_H`(기본 1280×720), `VIDEO_BITRATE`(기본 2500k), `VIDEO_FPS`(기본 30), `VIDEO_DISPLAY`(기본 :99).
-
 ## 현재 구현 범위 (v0.1)
 
-**됨**: 화면 스트리밍, **성능 모드(약한 기기 대응)**, 자동 시작(Codespaces), 마우스·휠·우클릭, 영문·**한글 입력**, 붙여넣기, 주소창(검색/이동),
-뒤로·새로고침, 멀티탭·팝업→탭, 로딩 표시, alert/confirm/prompt, 세션 파기·유휴 종료·자동 재연결.
+이미지(JPEG) 스트리밍 전용으로 설계했습니다. 일반 웹서핑·검색·글쓰기·스크롤에 충분하며,
+영상 코덱/소리는 의도적으로 넣지 않았습니다(단순함·호환성 우선).
 
-**아직(다음 단계)**: 소리·부드러운 영상(WebCodecs/WebRTC), `<select>`·날짜 등 네이티브 팝업
-대체 표시, 파일 다운로드 전송·업로드, 앞으로 가기 상태 정확도, 커서 모양 동기화, 터치스크린.
+**됨**: 화면 스트리밍, **성능 모드(약한 기기 대응)**, 자동 시작(Codespaces), 마우스·휠·우클릭, 영문·**한글 입력**, 붙여넣기, 주소창(검색/이동),
+뒤로·**앞으로**·새로고침, 멀티탭·팝업→탭, 로딩 표시, alert/confirm/prompt, 세션 파기·유휴 종료·자동 재연결.
+
+**아직(선택 과제)**: 소리·부드러운 영상, `<select>`·날짜 등 네이티브 팝업
+대체 표시, 파일 다운로드 전송·업로드, 커서 모양 동기화, 터치스크린.
 
 ## 한계 (꼭 알아두기)
 

@@ -184,11 +184,6 @@ export function focusSink() {
   document.getElementById("sink").focus({ preventScroll: true });
 }
 
-// In video mode the perf toggle (JPEG quality/scale) doesn't apply — hide it.
-export function setVideoMode(on) {
-  el.perf.classList.toggle("hidden", !!on);
-}
-
 // Apply the current performance mode. Scale is a CAPTURE-resolution setting sent
 // to the server; it does NOT change the page viewport, so the page never resizes
 // when you switch 선명/보통/절약 (only sharpness/frame rate change).

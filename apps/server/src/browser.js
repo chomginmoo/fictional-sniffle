@@ -22,47 +22,34 @@ const SANDBOX = (process.env.CHROMIUM_SANDBOX || "true") !== "false";
 // where the matching browser isn't where Playwright expects it.
 const EXECUTABLE_PATH = process.env.PW_EXECUTABLE_PATH || undefined;
 
-// video mode runs a HEADFUL browser on an Xvfb display so ffmpeg can capture it.
-export async function launchBrowser({ video = false, width, height } = {}) {
-  const args = [
-    "--disable-dev-shm-usage", // we size /dev/shm ourselves; avoid crashes
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-background-networking",
-    "--disable-sync",
-    "--disable-breakpad", // no crash dumps
-    // Disable GPU/SwiftShader: on constrained cloud CPUs the software GL can
-    // hit unsupported SIMD instructions and crash with SIGILL.
-    "--disable-gpu",
-    "--disable-software-rasterizer",
-    "--enable-smooth-scrolling", // animate wheel scroll so it streams smoother
-    "--disable-features=Translate,MediaRouter",
-  ];
-  if (video) {
-    // Fill the Xvfb display; autoplay media without a gesture (we are the user).
-    args.push(
-      "--kiosk",
-      "--window-position=0,0",
-      `--window-size=${width || 1280},${height || 720}`,
-      "--autoplay-policy=no-user-gesture-required",
-      "--start-maximized",
-    );
-  }
+export async function launchBrowser() {
   const browser = await chromium.launch({
-    headless: video ? false : HEADLESS,
+    headless: HEADLESS,
     chromiumSandbox: SANDBOX,
     executablePath: EXECUTABLE_PATH,
-    args,
+    args: [
+      "--disable-dev-shm-usage", // we size /dev/shm ourselves; avoid crashes
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-background-networking",
+      "--disable-sync",
+      "--disable-breakpad", // no crash dumps
+      // Disable GPU/SwiftShader: on constrained cloud CPUs the software GL can
+      // hit unsupported SIMD instructions and crash with SIGILL.
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--enable-smooth-scrolling", // animate wheel scroll so it streams smoother
+      "--disable-features=Translate,MediaRouter",
+    ],
   });
   return browser;
 }
 
-export async function newContext(browser, { width, height, video = false } = {}) {
+export async function newContext(browser, { width, height } = {}) {
   const context = await browser.newContext({
     locale: LOCALE,
     timezoneId: TZ,
-    // In video mode the window drives the size (viewport:null); otherwise set it.
-    viewport: video ? null : { width: width || 1280, height: height || 720 },
+    viewport: { width: width || 1280, height: height || 720 },
     acceptDownloads: true,
     // A mainstream UA reduces bot walls; tune as needed.
     userAgent:

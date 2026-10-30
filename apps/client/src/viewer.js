@@ -87,21 +87,46 @@ export function toRemoteCoords(ev) {
 }
 
 // ---- video mode (MediaSource) ----
-export function initVideo({ width, height, codec }) {
+let audioOn = false;
+
+export function initVideo({ width, height, codec, audio }) {
   mode = "video";
   viewportW = width;
   viewportH = height;
+  audioOn = !!audio;
   surfaceEl = videoEl;
   canvas.classList.add("hidden");
   videoEl.classList.remove("hidden");
+
+  // Autoplay policy: a video with sound can't start without a user gesture, so
+  // we start MUTED (plays immediately, picture shows) and offer a tap to unmute.
+  videoEl.muted = true;
+  videoEl.playsInline = true;
+
+  // When playback actually begins, surface the "enable sound" button if the
+  // stream carries audio.
+  videoEl.addEventListener(
+    "playing",
+    () => {
+      if (audioOn) document.getElementById("tapstart")?.classList.remove("hidden");
+    },
+    { once: true },
+  );
+
+  // once there's decodable data, make sure (muted) playback starts
+  videoEl.addEventListener("canplay", () => tryPlay(), { once: true });
 
   mediaSource = new MediaSource();
   videoEl.src = URL.createObjectURL(mediaSource);
   mediaSource.addEventListener("sourceopen", () => {
     try {
+      if (!window.MediaSource || !MediaSource.isTypeSupported(`video/mp4; codecs="${codec}"`)) {
+        console.error("codec not supported by MSE:", codec);
+      }
       sourceBuffer = mediaSource.addSourceBuffer(`video/mp4; codecs="${codec}"`);
       sourceBuffer.mode = "sequence";
       sourceBuffer.addEventListener("updateend", flushVideo);
+      flushVideo(); // in case chunks already queued before sourceopen
     } catch (e) {
       console.error("addSourceBuffer failed", e);
     }

@@ -28,7 +28,8 @@ conn.setHandlers({
         privacy.setConnected(true);
         if (m.mode === "video") {
           ui.setVideoMode(true);
-          viewer.initVideo({ width: m.width, height: m.height, codec: m.codec, audio: m.audio });
+          viewer.setStatusHandler((msg) => msg && ui.toast(msg));
+          viewer.initVideo({ width: m.width, height: m.height, codec: m.codec });
         } else {
           ui.setVideoMode(false);
           ui.applyPerf(); // sends perf (quality/fps) + scale + initial resize

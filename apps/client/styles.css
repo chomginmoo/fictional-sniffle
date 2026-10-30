@@ -191,20 +191,6 @@ video.screen {
   object-fit: contain;
   background: #000;
 }
-.tapstart {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  padding: 14px 22px;
-  border: none;
-  border-radius: 10px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-  z-index: 5;
-}
 /* keyboard/IME sink sits under the canvas, invisible but focusable */
 .sink {
   position: absolute;

@@ -35,6 +35,19 @@ let decoding = false;
 let mediaSource = null;
 let sourceBuffer = null;
 const appendQueue = [];
+let videoBytes = 0;
+let statusCb = null;
+
+export function setStatusHandler(fn) {
+  statusCb = fn;
+}
+function status(msg) {
+  try {
+    statusCb && statusCb(msg);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function init(canvasEl, videoElement) {
   canvas = canvasEl;
@@ -86,54 +99,53 @@ export function toRemoteCoords(ev) {
   return { x, y };
 }
 
-// ---- video mode (MediaSource) ----
+// ---- video mode (MediaSource), VIDEO-ONLY ----
 export function initVideo({ width, height, codec }) {
   mode = "video";
   viewportW = width;
   viewportH = height;
   surfaceEl = videoEl;
+  videoBytes = 0;
   canvas.classList.add("hidden");
   videoEl.classList.remove("hidden");
 
-  // Autoplay policy: a video with sound can't start without a user gesture, so
-  // we start MUTED (plays immediately, picture shows) and automatically unmute
-  // on the user's first interaction — no button needed. Sound is on by default
-  // from the moment they click or type (which they do to use the browser).
+  // No audio track, so autoplay works; keep muted to guarantee it.
   videoEl.muted = true;
   videoEl.playsInline = true;
-  const unmute = () => {
-    try {
-      videoEl.muted = false;
-      tryPlay();
-    } catch {
-      /* ignore */
-    }
-  };
-  window.addEventListener("pointerdown", unmute, { once: true });
-  window.addEventListener("keydown", unmute, { once: true });
-
-  // once there's decodable data, make sure (muted) playback starts
   videoEl.addEventListener("canplay", () => tryPlay(), { once: true });
+  videoEl.addEventListener("playing", () => status(""), { once: true });
+  videoEl.addEventListener("error", () => status("영상 디코딩 오류 (video element error)"));
+
+  const type = `video/mp4; codecs="${codec}"`;
+  if (window.MediaSource && !MediaSource.isTypeSupported(type)) {
+    status("이 브라우저가 영상 코덱을 지원하지 않습니다: " + codec);
+  }
 
   mediaSource = new MediaSource();
-  videoEl.src = URL.createObjectURL(mediaSource);
   mediaSource.addEventListener("sourceopen", () => {
     try {
-      if (!window.MediaSource || !MediaSource.isTypeSupported(`video/mp4; codecs="${codec}"`)) {
-        console.error("codec not supported by MSE:", codec);
-      }
-      sourceBuffer = mediaSource.addSourceBuffer(`video/mp4; codecs="${codec}"`);
+      sourceBuffer = mediaSource.addSourceBuffer(type);
       sourceBuffer.mode = "sequence";
       sourceBuffer.addEventListener("updateend", flushVideo);
-      flushVideo(); // in case chunks already queued before sourceopen
+      sourceBuffer.addEventListener("error", () => status("영상 버퍼 오류 (SourceBuffer)"));
+      flushVideo(); // append anything that queued before sourceopen
     } catch (e) {
-      console.error("addSourceBuffer failed", e);
+      status("영상 초기화 실패: " + (e.message || e));
     }
   });
+  videoEl.src = URL.createObjectURL(mediaSource);
   tryPlay();
+
+  // Diagnostics: if no bytes arrive, the problem is server-side (ffmpeg/Xvfb).
+  setTimeout(() => {
+    if (mode === "video" && videoBytes === 0) {
+      status("영상 데이터가 오지 않습니다 — 서버 ffmpeg/Xvfb를 확인하세요");
+    }
+  }, 5000);
 }
 
 export function onVideoChunk(payload) {
+  videoBytes += payload.byteLength;
   appendQueue.push(new Uint8Array(payload));
   flushVideo();
 }

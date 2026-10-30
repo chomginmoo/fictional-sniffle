@@ -87,16 +87,20 @@ export class Session {
     this.activeId = tab.id;
     await tab.navigate(startPage);
 
-    this.audio = !!env.audioMonitor;
-    this._codec = codecString(this.audio);
+    this.audio = false; // video-only
+    this._codec = codecString();
     this.ffmpeg = startFfmpeg({
       display: env.display,
       width: env.width,
       height: env.height,
-      audioMonitor: env.audioMonitor,
       fps: this.fps,
       onChunk: (buf) => this.sendVideo(buf),
-      onClose: () => {},
+      onClose: (code) => {
+        if (!this.dead) this.send({ t: "err", message: "영상 인코더 종료됨 (ffmpeg exit " + code + ")" });
+      },
+      onError: (info) => {
+        console.error("[render-server] ffmpeg:", String(info).slice(0, 200));
+      },
     });
 
     this.resetIdle();

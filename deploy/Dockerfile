@@ -9,7 +9,8 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY apps/server/package.json apps/server/package-lock.json* ./apps/server/
-RUN cd apps/server && npm install --omit=dev
+RUN cd apps/server && npm install --omit=dev \
+  && npx playwright install chromium  # ensure the matching browser is present
 
 COPY apps/server ./apps/server
 COPY apps/client ./apps/client

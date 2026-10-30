@@ -52,8 +52,11 @@
         <button id="burn" class="icon danger" title="세션 파기">🔥</button>
       </div>
       <div id="progress" class="progress hidden"></div>
-      <div class="stage">
+      <div id="stage" class="stage">
         <canvas id="screen" class="screen" tabindex="0"></canvas>
+        <!-- video-mode surface (MediaSource); hidden in JPEG mode -->
+        <video id="screenv" class="screen hidden" playsinline></video>
+        <button id="tapstart" class="tapstart hidden">▶ 탭하여 재생/소리 켜기</button>
         <!-- hidden input sink: captures physical keyboard + IME + on-screen kbd -->
         <textarea
           id="sink"

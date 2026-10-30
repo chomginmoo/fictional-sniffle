@@ -44,21 +44,22 @@ export class Session {
     this.idleTimer = null;
     this.graceTimer = null;
     this.dead = false;
+    // video mode (experimental): headful Chromium on Xvfb captured by ffmpeg
+    this.video = process.env.STREAM_MODE === "video";
+    this.ffmpeg = null;
+    this.audio = false;
   }
 
   async start() {
+    if (this.video) return this._startVideo();
+
     this.browser = await launchBrowser();
     this.context = await newContext(this.browser, {
       width: this.width,
       height: this.height,
     });
 
-    // Defense-in-depth SSRF guard on every request (firewall is primary).
-    await this.context.route("**/*", (route) => {
-      const url = route.request().url();
-      if (!navigationAllowed(url)) return route.abort("blockedbyclient");
-      return route.continue();
-    });
+    await this._installRouteGuard();
 
     const tab = await this._makeTab();
     this.activeId = tab.id;
@@ -66,6 +67,72 @@ export class Session {
     await tab.startCast();
     await tab.navigate(startPage);
     this.resetIdle();
+    this.send(this._hello());
+  }
+
+  async _startVideo() {
+    const { ensureEnv, startFfmpeg, codecString, VIDEO_W, VIDEO_H } = await import(
+      "./videoStream.js"
+    );
+    const env = await ensureEnv();
+    process.env.DISPLAY = env.display;
+    this.width = VIDEO_W;
+    this.height = VIDEO_H;
+
+    this.browser = await launchBrowser({ video: true, width: VIDEO_W, height: VIDEO_H });
+    this.context = await newContext(this.browser, { video: true });
+    await this._installRouteGuard();
+
+    const tab = await this._makeTab();
+    this.activeId = tab.id;
+    await tab.navigate(startPage);
+
+    this.audio = !!env.audioMonitor;
+    this._codec = codecString(this.audio);
+    this.ffmpeg = startFfmpeg({
+      display: env.display,
+      width: env.width,
+      height: env.height,
+      audioMonitor: env.audioMonitor,
+      fps: this.fps,
+      onChunk: (buf) => this.sendVideo(buf),
+      onClose: () => {},
+    });
+
+    this.resetIdle();
+    this.send(this._hello());
+  }
+
+  async _installRouteGuard() {
+    // Defense-in-depth SSRF guard on every request (firewall is primary).
+    await this.context.route("**/*", (route) => {
+      const url = route.request().url();
+      if (!navigationAllowed(url)) return route.abort("blockedbyclient");
+      return route.continue();
+    });
+  }
+
+  _hello() {
+    return {
+      t: "hello",
+      mode: this.video ? "video" : "jpeg",
+      width: this.width,
+      height: this.height,
+      audio: this.audio,
+      codec: this._codec || "",
+    };
+  }
+
+  // Send a fragmented-MP4 chunk to the client (video mode). The stream must stay
+  // in order and contiguous, so we never drop — unlike JPEG frames.
+  sendVideo(buf) {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== ws.OPEN) return;
+    try {
+      ws.send(Buffer.concat([Buffer.from([2]), buf]), { binary: true });
+    } catch {
+      /* ignore */
+    }
   }
 
   async _makeTab(page) {
@@ -161,6 +228,7 @@ export class Session {
   }
 
   async setViewport(w, h) {
+    if (this.video) return; // video mode uses a fixed display size
     this.width = w;
     this.height = h;
     const a = this.active;
@@ -268,6 +336,7 @@ export class Session {
         await this.respondDialog(m.id, m.accept, m.text);
         break;
       case "perf":
+        if (this.video) break; // perf (jpeg quality/scale) doesn't apply to video
         this.quality = m.quality;
         this.fps = m.fps;
         this.captureScale = m.scale ?? 1;
@@ -290,6 +359,14 @@ export class Session {
     this.dead = true;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.graceTimer) clearTimeout(this.graceTimer);
+    if (this.ffmpeg) {
+      try {
+        this.ffmpeg.kill("SIGKILL");
+      } catch {
+        /* ignore */
+      }
+      this.ffmpeg = null;
+    }
     for (const t of this.tabs.values()) {
       try {
         await t.close();

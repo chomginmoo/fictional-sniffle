@@ -220,8 +220,7 @@ wss.on("connection", (ws) => {
       currentSession = session;
       session.bindSocket(ws);
       try {
-        await session.start();
-        session.send({ t: "hello" });
+        await session.start(); // start() sends its own hello (with stream mode)
       } catch (e) {
         // Log the REAL reason to the server terminal/log (was swallowed before)
         console.error("[render-server] browser start failed:", e?.message || e);

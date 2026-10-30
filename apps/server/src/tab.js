@@ -116,6 +116,7 @@ export class Tab {
 
   async startCast() {
     if (!this.cdp) return;
+    if (this.session.video) return; // video mode captures via ffmpeg, not screencast
     // If already casting (e.g. a quality/viewport change), restart so Chromium
     // emits a fresh frame with the new settings instead of silently ignoring
     // the second start.

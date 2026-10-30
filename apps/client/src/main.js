@@ -9,14 +9,18 @@ import { attachIme } from "./input/ime.js";
 
 const privacy = setupPrivacy();
 ui.init();
-viewer.init(document.getElementById("screen"));
-
-// attach input handlers once
 const canvas = document.getElementById("screen");
+const videoEl = document.getElementById("screenv");
+const stage = document.getElementById("stage");
 const sink = document.getElementById("sink");
-attachMouse(canvas, sink);
+viewer.init(canvas, videoEl);
+
+// attach input handlers once, to the stage (works for canvas or video surface)
+attachMouse(stage, sink);
 attachKeyboard(sink);
 attachIme(sink);
+
+document.getElementById("tapstart").addEventListener("click", () => viewer.startPlayback());
 
 conn.setHandlers({
   onMessage(m) {
@@ -24,7 +28,13 @@ conn.setHandlers({
       case "hello":
         ui.showBrowser();
         privacy.setConnected(true);
-        ui.applyPerf(); // sends perf (quality/fps) + scale + initial resize
+        if (m.mode === "video") {
+          ui.setVideoMode(true);
+          viewer.initVideo({ width: m.width, height: m.height, codec: m.codec });
+        } else {
+          ui.setVideoMode(false);
+          ui.applyPerf(); // sends perf (quality/fps) + scale + initial resize
+        }
         ui.focusSink();
         break;
       case "state":
@@ -53,7 +63,10 @@ conn.setHandlers({
     }
   },
   onBinary(buf) {
-    viewer.onFrame(buf);
+    // first byte is the stream type: 1 = JPEG frame, 2 = video (fMP4) chunk
+    const type = new Uint8Array(buf, 0, 1)[0];
+    if (type === 2) viewer.onVideoChunk(buf.slice(1));
+    else viewer.onFrame(buf);
   },
   onAuthError(msg) {
     privacy.setConnected(false);
@@ -82,7 +95,7 @@ document.getElementById("login-form").addEventListener("submit", (ev) => {
 });
 
 // keep the keyboard sink focused when the user clicks into the page area
-document.getElementById("screen").addEventListener("click", () => ui.focusSink());
+stage.addEventListener("click", () => ui.focusSink());
 
 // periodic ping to keep the socket warm and detect death
 setInterval(() => conn.send({ t: "ping" }), 25000);

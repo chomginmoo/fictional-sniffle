@@ -19,9 +19,22 @@ if (exec 3<>/dev/tcp/127.0.0.1/8080) 2>/dev/null; then
 fi
 
 export CHROMIUM_SANDBOX="${CHROMIUM_SANDBOX:-false}"
-export APP_PASSWORD="${APP_PASSWORD:-test1234}"
 export HEADLESS="${HEADLESS:-true}"
+
+# Password: prefer a Codespaces Secret named APP_PASSWORD (stable). If none is
+# set we generate a RANDOM one per start instead of a well-known default — this
+# matters because making the port Public exposes the server to the internet,
+# where a guessable password would be an open browsing proxy.
+if [ -z "$APP_PASSWORD" ]; then
+  APP_PASSWORD="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)"
+  echo "================================================================"
+  echo " APP_PASSWORD was not set — generated a random one for this run:"
+  echo "     $APP_PASSWORD"
+  echo " (Set a Codespaces Secret named APP_PASSWORD for a stable one.)"
+  echo "================================================================"
+fi
+export APP_PASSWORD
 
 nohup node src/index.js > /tmp/render-server.log 2>&1 &
 sleep 1
-echo "render-server starting (password: ${APP_PASSWORD}; log: /tmp/render-server.log)"
+echo "render-server started. Password is above. Log: /tmp/render-server.log"

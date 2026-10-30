@@ -58,11 +58,21 @@ deploy/        Dockerfile · docker-compose.yml · Caddyfile · firewall.nft
 1. 이 저장소에서 Codespace 생성 (브라우저 탭 안의 VS Code).
 2. 1~2분 뒤 서버가 자동으로 떠요. 아래 **PORTS(포트)** 탭의 8080 주소
    (`https://...-8080.app.github.dev`)를 **집 기기**에서 열기.
-   - 포트 가시성은 `private`(본인 GitHub 로그인 필요) 권장.
+   - **포트 가시성**: `Private`면 그 주소를 **같은 GitHub 계정으로 로그인된 브라우저**에서만
+     열 수 있어요(아니면 GitHub가 **401**을 냄 — 아래 참고). 여러 기기에서 쓰려면
+     포트를 우클릭 → **Port Visibility → Public**으로 바꾸고, 반드시 강한 비밀번호를 쓰세요.
 3. 로그인 비밀번호:
-   - 기본값은 테스트용 **`test1234`** (자동 시작 편의를 위한 임시값).
-   - 제대로 쓰려면 저장소 → Settings → Secrets → Codespaces에서
-     `APP_PASSWORD`를 넣으세요. 그러면 그 값이 비밀번호가 됩니다.
+   - `APP_PASSWORD` Secret을 설정하지 않으면, **시작할 때마다 랜덤 비밀번호가 생성**돼
+     터미널/로그(`cat /tmp/render-server.log`)에 출력됩니다.
+   - 고정 비밀번호를 쓰려면 저장소 → Settings → Secrets → Codespaces에서
+     `APP_PASSWORD`를 넣으세요. (Public 포트로 쓸 거면 **반드시** 설정)
+
+### 접속 시 `HTTP ERROR 401` 전체 화면이 뜰 때
+
+우리 앱이 아니라 **GitHub Codespaces 포트 인증**이 막은 것입니다(앱은 GET에 401을 내지 않음).
+포트가 `Private`인데 여는 브라우저가 그 Codespace에 인증돼 있지 않아서예요. 해결:
+- **포트를 Public**으로 바꾸기(가장 간단, 강한 `APP_PASSWORD` 필수), 또는
+- 그 주소를 **같은 GitHub 계정으로 로그인한 브라우저**에서 열기.
 
 수동으로 켜고 싶으면:
 ```bash

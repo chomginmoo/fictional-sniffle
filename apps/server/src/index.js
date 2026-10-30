@@ -221,7 +221,12 @@ wss.on("connection", (ws) => {
         await session.start();
         session.send({ t: "hello" });
       } catch (e) {
-        session.send({ t: "err", message: "브라우저 시작 실패" });
+        // Log the REAL reason to the server terminal/log (was swallowed before)
+        console.error("[render-server] browser start failed:", e?.message || e);
+        const reason = String(e?.message || e).split("\n")[0].slice(0, 180);
+        session.send({ t: "err", message: "브라우저 시작 실패: " + reason });
+        // Send bye so the client stops auto-reconnecting into a failure loop.
+        session.send({ t: "bye", reason: "start-failed" });
         session.burn("start-failed").catch(() => {});
       }
       return;

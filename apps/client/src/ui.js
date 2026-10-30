@@ -168,6 +168,7 @@ export function onBye(reason) {
     burned: "세션을 파기했습니다.",
     replaced: "다른 곳에서 로그인되어 이 세션이 종료되었습니다.",
     "no-tabs": "모든 탭이 닫혀 세션이 종료되었습니다.",
+    "start-failed": "브라우저를 시작하지 못했습니다. 서버 터미널 로그를 확인하세요 (브라우저 미설치일 가능성).",
   };
   showLogin(reasons[reason] || "세션이 종료되었습니다.");
 }

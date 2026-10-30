@@ -20,8 +20,6 @@ attachMouse(stage, sink);
 attachKeyboard(sink);
 attachIme(sink);
 
-document.getElementById("tapstart").addEventListener("click", () => viewer.startPlayback());
-
 conn.setHandlers({
   onMessage(m) {
     switch (m.t) {

@@ -87,31 +87,30 @@ export function toRemoteCoords(ev) {
 }
 
 // ---- video mode (MediaSource) ----
-let audioOn = false;
-
-export function initVideo({ width, height, codec, audio }) {
+export function initVideo({ width, height, codec }) {
   mode = "video";
   viewportW = width;
   viewportH = height;
-  audioOn = !!audio;
   surfaceEl = videoEl;
   canvas.classList.add("hidden");
   videoEl.classList.remove("hidden");
 
   // Autoplay policy: a video with sound can't start without a user gesture, so
-  // we start MUTED (plays immediately, picture shows) and offer a tap to unmute.
+  // we start MUTED (plays immediately, picture shows) and automatically unmute
+  // on the user's first interaction — no button needed. Sound is on by default
+  // from the moment they click or type (which they do to use the browser).
   videoEl.muted = true;
   videoEl.playsInline = true;
-
-  // When playback actually begins, surface the "enable sound" button if the
-  // stream carries audio.
-  videoEl.addEventListener(
-    "playing",
-    () => {
-      if (audioOn) document.getElementById("tapstart")?.classList.remove("hidden");
-    },
-    { once: true },
-  );
+  const unmute = () => {
+    try {
+      videoEl.muted = false;
+      tryPlay();
+    } catch {
+      /* ignore */
+    }
+  };
+  window.addEventListener("pointerdown", unmute, { once: true });
+  window.addEventListener("keydown", unmute, { once: true });
 
   // once there's decodable data, make sure (muted) playback starts
   videoEl.addEventListener("canplay", () => tryPlay(), { once: true });
@@ -188,18 +187,7 @@ function keepLive() {
 
 function tryPlay() {
   const p = videoEl.play?.();
-  if (p && p.catch) {
-    p.catch(() => {
-      // autoplay blocked — show a tap-to-start button (set up in main.js)
-      document.getElementById("tapstart")?.classList.remove("hidden");
-    });
-  }
-}
-
-export function startPlayback() {
-  document.getElementById("tapstart")?.classList.add("hidden");
-  videoEl.muted = false;
-  tryPlay();
+  if (p && p.catch) p.catch(() => {}); // muted autoplay should succeed; ignore
 }
 
 // Called for every incoming binary frame. We only keep the newest buffer and

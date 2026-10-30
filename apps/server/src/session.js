@@ -11,7 +11,9 @@ import { encodeFrameHeader } from "./protocol.js";
 
 const IDLE_MS = Number(process.env.IDLE_MS || 15 * 60_000);
 const GRACE_MS = Number(process.env.GRACE_MS || 60_000);
-const SEND_HIGH_WATER = 512 * 1024; // drop frames while socket is this far behind
+// Drop frames while the socket is this far behind. Kept small so scroll frames
+// don't queue up and add latency (the client only ever draws the newest frame).
+const SEND_HIGH_WATER = Number(process.env.SEND_HIGH_WATER || 256 * 1024);
 
 export class Session {
   constructor() {
@@ -27,7 +29,14 @@ export class Session {
     this.height = 720;
     // performance knobs (client can change via a "perf" message)
     this.quality = Number(process.env.JPEG_QUALITY || 60);
-    this.fps = Number(process.env.MAX_FPS || 20);
+    this.fps = Number(process.env.MAX_FPS || 24);
+    // Motion-adaptive quality: while scrolling/moving we drop quality so more
+    // frames fit through the link (smoother motion); when it stops we restore
+    // full quality and a crisp frame is sent. This is the main scroll fix.
+    this.motion = false;
+    this.motionQuality = Number(process.env.MOTION_QUALITY || 35);
+    this.motionIdleMs = Number(process.env.MOTION_IDLE_MS || 220);
+    this._motionTimer = null;
     this.idleTimer = null;
     this.graceTimer = null;
     this.dead = false;
@@ -114,6 +123,25 @@ export class Session {
       this.send({ t: "bye", reason: "idle" });
       this.burn("idle");
     }, IDLE_MS);
+  }
+
+  // JPEG quality to use right now (lower while moving, full when still).
+  currentQuality() {
+    return this.motion ? Math.min(this.quality, this.motionQuality) : this.quality;
+  }
+
+  // Called on scroll/move/typing. Enters "motion" (low quality, high fps) and,
+  // after a short quiet period, returns to full quality with a crisp frame.
+  noteMotion() {
+    if (!this.motion) {
+      this.motion = true;
+      if (this.active) this.active.startCast(); // re-arm at motion quality
+    }
+    if (this._motionTimer) clearTimeout(this._motionTimer);
+    this._motionTimer = setTimeout(() => {
+      this.motion = false;
+      if (this.active) this.active.startCast(); // crisp frame at full quality
+    }, this.motionIdleMs);
   }
 
   get active() {
@@ -214,8 +242,14 @@ export class Session {
       case "nav":
         if (this.active) await this.active.nav(m.op);
         break;
-      case "mouse":
       case "wheel":
+        this.noteMotion(); // scrolling -> motion quality for smoothness
+        if (this.active) await this.active.input(m);
+        break;
+      case "mouse":
+        if (m.op === "move") this.noteMotion();
+        if (this.active) await this.active.input(m);
+        break;
       case "key":
       case "ime":
       case "text":

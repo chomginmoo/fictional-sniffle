@@ -13,9 +13,9 @@ let pendingDialogId = null;
 // Performance presets. "보통" is the default — tuned for a weak Chromebook:
 // fewer rendered pixels (scale), lower JPEG quality, capped frame rate.
 const PERF_MODES = [
-  { name: "선명", scale: 1.0, quality: 80, fps: 24 },
-  { name: "보통", scale: 0.85, quality: 55, fps: 18 },
-  { name: "절약", scale: 0.6, quality: 38, fps: 12 },
+  { name: "선명", scale: 1.0, quality: 80, fps: 30 },
+  { name: "보통", scale: 0.85, quality: 60, fps: 26 },
+  { name: "절약", scale: 0.65, quality: 42, fps: 20 },
 ];
 let perfIndex = 1;
 

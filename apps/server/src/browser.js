@@ -34,6 +34,7 @@ export async function launchBrowser() {
       "--disable-background-networking",
       "--disable-sync",
       "--disable-breakpad", // no crash dumps
+      "--enable-smooth-scrolling", // animate wheel scroll so it streams smoother
       "--disable-features=Translate,MediaRouter",
     ],
   });

@@ -125,7 +125,7 @@ export class Tab {
     try {
       await this.cdp.send("Page.startScreencast", {
         format: "jpeg",
-        quality: this.session.quality ?? JPEG_QUALITY,
+        quality: this.session.currentQuality?.() ?? this.session.quality ?? JPEG_QUALITY,
         maxWidth: this.width,
         maxHeight: this.height,
         everyNthFrame: 1,

@@ -150,7 +150,7 @@ DOMAIN=my.duckdns.org APP_PASSWORD='강한-비밀번호' docker compose up -d
   **H.264(Annex-B)**로 인코딩 → 브라우저가 **WebCodecs로 디코딩해 캔버스에 그림**
   (JPEG 모드와 같은 캔버스 경로; `<video>`/`blob:` 미사용). **소리는 없어요(영상 전용).**
 - **부드러운 영상**이 돼요(유튜브 등 화면). 입력은 그대로 CDP로 주입.
-- 필요 패키지: `xvfb ffmpeg` (devcontainer/Docker에 포함).
+- 필요 패키지: `xvfb ffmpeg matchbox-window-manager` (devcontainer/Docker에 포함).
 
 실행 예 (Codespace 터미널):
 ```bash

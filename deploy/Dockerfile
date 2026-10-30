@@ -7,7 +7,7 @@ FROM mcr.microsoft.com/playwright:v1.47.0-jammy
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        fonts-noto-cjk fonts-noto-color-emoji \
-       xvfb ffmpeg \
+       xvfb ffmpeg matchbox-window-manager \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

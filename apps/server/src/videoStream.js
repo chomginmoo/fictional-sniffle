@@ -9,10 +9,11 @@ import { spawn, spawnSync } from "node:child_process";
 export const VIDEO_W = Number(process.env.VIDEO_W || 1280);
 export const VIDEO_H = Number(process.env.VIDEO_H || 720);
 const DISPLAY = process.env.VIDEO_DISPLAY || ":99";
-const VIDEO_BITRATE = process.env.VIDEO_BITRATE || "2500k";
+const VIDEO_BITRATE = process.env.VIDEO_BITRATE || "4500k";
 const VIDEO_FPS = Number(process.env.VIDEO_FPS || 30);
 
 let xvfb = null;
+let wm = null;
 let envReady = false;
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -38,6 +39,19 @@ export async function ensureEnv() {
     envReady = false;
   });
   await delay(900);
+
+  // A tiny window manager so Chrome's --kiosk actually goes fullscreen (no
+  // toolbar/tabs). Without it, the browser UI is captured into the video AND
+  // input coordinates are offset by the toolbar height. Best-effort.
+  process.env.DISPLAY = DISPLAY;
+  if (have("matchbox-window-manager")) {
+    wm = spawn("matchbox-window-manager", ["-use_titlebar", "no"], {
+      stdio: "ignore",
+      env: { ...process.env, DISPLAY },
+    });
+    await delay(400);
+  }
+
   envReady = true;
   return { display: DISPLAY, width: VIDEO_W, height: VIDEO_H };
 }
@@ -79,11 +93,14 @@ export function startFfmpeg({ display, width, height, fps = VIDEO_FPS, onChunk, 
 }
 
 export function shutdownEnv() {
-  try {
-    if (xvfb) xvfb.kill("SIGKILL");
-  } catch {
-    /* ignore */
+  for (const p of [wm, xvfb]) {
+    try {
+      if (p) p.kill("SIGKILL");
+    } catch {
+      /* ignore */
+    }
   }
+  wm = null;
   xvfb = null;
   envReady = false;
 }

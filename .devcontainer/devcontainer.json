@@ -10,7 +10,7 @@
       "onAutoForward": "notify"
     }
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y xvfb ffmpeg && cd apps/server && npm install && npx playwright install chromium",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y xvfb ffmpeg matchbox-window-manager && cd apps/server && npm install && npx playwright install chromium",
   "postStartCommand": "bash .devcontainer/autostart.sh",
   "customizations": {
     "vscode": {

@@ -52,16 +52,23 @@ deploy/        Dockerfile · docker-compose.yml · Caddyfile · firewall.nft
 
 ## 1. 개발·테스트 (GitHub Codespaces, 무료·리눅스 불필요)
 
+**서버는 Codespace가 켜지면 자동으로 시작됩니다**(`.devcontainer/autostart.sh`).
+편집기 탭이 멈추거나 닫혀도 서버는 컨테이너 안에서 계속 돌아갑니다.
+
 1. 이 저장소에서 Codespace 생성 (브라우저 탭 안의 VS Code).
-2. 비밀번호를 Codespaces Secrets에 `APP_PASSWORD`로 넣거나, 터미널에서 export.
-3. 서버 실행:
-   ```bash
-   cd apps/server
-   npm install
-   APP_PASSWORD='강한-비밀번호' npm start
-   ```
-4. VS Code가 포워딩한 8080 포트의 `https://...app.github.dev` 주소를 **집 기기**에서 열기.
+2. 1~2분 뒤 서버가 자동으로 떠요. 아래 **PORTS(포트)** 탭의 8080 주소
+   (`https://...-8080.app.github.dev`)를 **집 기기**에서 열기.
    - 포트 가시성은 `private`(본인 GitHub 로그인 필요) 권장.
+3. 로그인 비밀번호:
+   - 기본값은 테스트용 **`test1234`** (자동 시작 편의를 위한 임시값).
+   - 제대로 쓰려면 저장소 → Settings → Secrets → Codespaces에서
+     `APP_PASSWORD`를 넣으세요. 그러면 그 값이 비밀번호가 됩니다.
+
+수동으로 켜고 싶으면:
+```bash
+cd apps/server && npm install
+APP_PASSWORD='강한-비밀번호' npm start
+```
 
 > Codespaces 컨테이너는 임시입니다. 변경한 코드는 꼭 커밋·푸시하세요.
 

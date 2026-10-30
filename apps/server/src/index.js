@@ -8,7 +8,9 @@ import {
   login,
   consumeTicket,
   originAllowed,
-  rateLimited,
+  tooManyAttempts,
+  noteFailedAttempt,
+  clearAttempts,
   passwordConfigured,
   sweepTickets,
 } from "./auth.js";
@@ -95,7 +97,7 @@ function serveStatic(req, res) {
 
 function handleLogin(req, res) {
   const ip = clientIp(req);
-  if (rateLimited(ip)) {
+  if (tooManyAttempts(ip)) {
     securityHeaders(res);
     res.writeHead(429, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ error: "too many attempts" }));
@@ -123,9 +125,11 @@ function handleLogin(req, res) {
     }
     const ticket = login(pw);
     if (!ticket) {
+      noteFailedAttempt(ip);
       res.writeHead(401, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: "invalid" }));
     }
+    clearAttempts(ip); // success resets the counter
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ticket }));
   });

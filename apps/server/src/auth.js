@@ -14,9 +14,11 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
 const TICKET_TTL_MS = 30_000;
 const tickets = new Map(); // ticket -> expiresAt
 
-// crude per-IP login throttle: max 10 attempts / 5 min
+// per-IP login throttle. Only FAILED attempts count, and a success clears the
+// counter, so normal logins and reconnects never trip it — only repeated wrong
+// passwords do.
 const WINDOW_MS = 5 * 60_000;
-const MAX_ATTEMPTS = 10;
+const MAX_ATTEMPTS = 20;
 const attempts = new Map(); // ip -> { count, resetAt }
 
 export function passwordConfigured() {
@@ -34,7 +36,13 @@ function constantTimeEqual(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
-export function rateLimited(ip) {
+export function tooManyAttempts(ip) {
+  const a = attempts.get(ip);
+  if (!a || Date.now() > a.resetAt) return false;
+  return a.count >= MAX_ATTEMPTS;
+}
+
+export function noteFailedAttempt(ip) {
   const now = Date.now();
   let a = attempts.get(ip);
   if (!a || now > a.resetAt) {
@@ -42,7 +50,10 @@ export function rateLimited(ip) {
     attempts.set(ip, a);
   }
   a.count += 1;
-  return a.count > MAX_ATTEMPTS;
+}
+
+export function clearAttempts(ip) {
+  attempts.delete(ip);
 }
 
 // Returns a fresh one-time ticket string on success, or null on bad password.

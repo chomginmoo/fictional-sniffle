@@ -11,14 +11,10 @@
     }
   },
   "postCreateCommand": "cd apps/server && npm install",
-  "remoteEnv": {
-    "APP_PASSWORD": "change-me-in-codespaces-secrets",
-    "HEADLESS": "true",
-    "CHROMIUM_SANDBOX": "false"
-  },
+  "postStartCommand": "bash .devcontainer/autostart.sh",
   "customizations": {
     "vscode": {
-      "extensions": ["dbaeumer.vscode-eslint"]
+      "extensions": []
     }
   }
 }

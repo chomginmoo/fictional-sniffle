@@ -68,6 +68,13 @@ async function open() {
       handlers.onAuthError?.(ev.reason || "인증 실패");
       return;
     }
+    // 1000 = intentional server close (e.g. this session was replaced by a
+    // login from another tab). Do NOT auto-reconnect, or two tabs ping-pong
+    // forever each kicking the other off. A real network drop uses 1006/1001.
+    if (ev.code === 1000) {
+      handlers.onReplaced?.(ev.reason || "");
+      return;
+    }
     scheduleReconnect();
   };
   ws.onerror = () => {

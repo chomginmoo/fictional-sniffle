@@ -200,10 +200,12 @@ wss.on("connection", (ws) => {
       authed = true;
       clearTimeout(authTimer);
 
-      // replace any existing session (single user)
+      // replace any existing session (single user). Tell the old client it was
+      // replaced so it stops (instead of auto-reconnecting into a ping-pong).
       if (currentSession) {
         const old = currentSession;
         currentSession = null;
+        old.send({ t: "bye", reason: "replaced" });
         old.burn("replaced").catch(() => {});
       }
       session = new Session();

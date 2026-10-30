@@ -62,6 +62,13 @@ conn.setHandlers({
   onReconnecting() {
     ui.toast("다시 연결 중…");
   },
+  onReplaced() {
+    // server closed us intentionally (another tab took over) — stop here
+    privacy.setConnected(false);
+    conn.close();
+    viewer.clear();
+    ui.showLogin("다른 탭/기기에서 열려 이 세션이 종료되었습니다. 한 곳에서만 사용하세요.");
+  },
   onClose() {
     /* reconnect logic lives in connection.js */
   },

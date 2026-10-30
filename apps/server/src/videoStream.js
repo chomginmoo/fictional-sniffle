@@ -56,7 +56,8 @@ export function startFfmpeg({ display, width, height, fps = VIDEO_FPS, onChunk, 
     "-video_size", `${width}x${height}`, "-i", display,
     "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
     "-profile:v", "baseline", "-level:v", "3.1", "-pix_fmt", "yuv420p",
-    "-g", String(fps * 2), "-b:v", VIDEO_BITRATE, "-maxrate", VIDEO_BITRATE, "-bufsize", "1M",
+    "-g", String(fps), "-keyint_min", String(fps), // keyframe every ~1s for MSE robustness
+    "-b:v", VIDEO_BITRATE, "-maxrate", VIDEO_BITRATE, "-bufsize", "1M",
     "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
     "-frag_duration", "100000", // ~100ms fragments for low latency
     "-f", "mp4", "pipe:1",

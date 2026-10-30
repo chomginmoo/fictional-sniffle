@@ -114,7 +114,13 @@ export function initVideo({ width, height, codec }) {
   videoEl.playsInline = true;
   videoEl.addEventListener("canplay", () => tryPlay(), { once: true });
   videoEl.addEventListener("playing", () => status(""), { once: true });
-  videoEl.addEventListener("error", () => status("영상 디코딩 오류 (video element error)"));
+  videoEl.addEventListener("error", () => {
+    const e = videoEl.error;
+    const names = { 1: "ABORTED", 2: "NETWORK", 3: "DECODE", 4: "SRC_NOT_SUPPORTED" };
+    status(
+      "영상 오류: " + (names[e?.code] || e?.code || "?") + (e?.message ? " — " + e.message : ""),
+    );
+  });
 
   const type = `video/mp4; codecs="${codec}"`;
   if (window.MediaSource && !MediaSource.isTypeSupported(type)) {
@@ -125,7 +131,8 @@ export function initVideo({ width, height, codec }) {
   mediaSource.addEventListener("sourceopen", () => {
     try {
       sourceBuffer = mediaSource.addSourceBuffer(type);
-      sourceBuffer.mode = "sequence";
+      // Default "segments" mode: fragmented MP4 carries its own timestamps, so
+      // forcing "sequence" can corrupt the timeline and cause DECODE errors.
       sourceBuffer.addEventListener("updateend", flushVideo);
       sourceBuffer.addEventListener("error", () => status("영상 버퍼 오류 (SourceBuffer)"));
       flushVideo(); // append anything that queued before sourceopen

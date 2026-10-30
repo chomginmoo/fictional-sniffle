@@ -30,6 +30,10 @@ export class Session {
     // performance knobs (client can change via a "perf" message)
     this.quality = Number(process.env.JPEG_QUALITY || 60);
     this.fps = Number(process.env.MAX_FPS || 24);
+    this.motionFps = Number(process.env.MOTION_FPS || 40); // more frames while moving
+    // Capture-resolution scale. Applied ONLY to the screencast image size, NOT
+    // the page viewport — so changing perf mode never reflows the web page.
+    this.captureScale = 1;
     // Motion-adaptive quality: while scrolling/moving we drop quality so more
     // frames fit through the link (smoother motion); when it stops we restore
     // full quality and a crisp frame is sent. This is the main scroll fix.
@@ -266,7 +270,8 @@ export class Session {
       case "perf":
         this.quality = m.quality;
         this.fps = m.fps;
-        if (this.active) await this.active.startCast(); // re-apply quality
+        this.captureScale = m.scale ?? 1;
+        if (this.active) await this.active.startCast(); // re-apply quality/scale
         break;
       case "ack":
         break; // frame acks are advisory; bufferedAmount is the real signal

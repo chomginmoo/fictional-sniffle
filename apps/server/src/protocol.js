@@ -144,7 +144,9 @@ export function parseClientMessage(raw) {
       return {
         t: "perf",
         quality: isInt(m.quality) ? clampInt(m.quality, 20, 90) : 60,
-        fps: isInt(m.fps) ? clampInt(m.fps, 1, 30) : 20,
+        fps: isInt(m.fps) ? clampInt(m.fps, 1, 60) : 24,
+        // capture-resolution scale ONLY (does not change the page viewport)
+        scale: isFiniteNum(m.scale) ? Math.max(0.3, Math.min(1, m.scale)) : 1,
       };
 
     case "ack":

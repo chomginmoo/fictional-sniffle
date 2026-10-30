@@ -33,8 +33,12 @@ export class Tab {
       if (!this.casting) return;
       // throttle to the session's target fps (we still ack every frame above so
       // Chromium keeps capturing; we just forward fewer to the weak client).
+      // While moving/scrolling, allow a higher fps for smoother motion.
       const now = Date.now();
-      const minInterval = 1000 / (this.session.fps || 20);
+      const targetFps = this.session.motion
+        ? this.session.motionFps || this.session.fps || 20
+        : this.session.fps || 20;
+      const minInterval = 1000 / targetFps;
       if (now - (this._lastSent || 0) < minInterval) return;
       this._lastSent = now;
       const bytes = Buffer.from(f.data, "base64");
@@ -123,11 +127,14 @@ export class Tab {
       }
     }
     try {
+      // Viewport (this.width/height) is the full client size; the capture scale
+      // only shrinks the streamed image, so the page never reflows on perf change.
+      const scale = this.session.captureScale ?? 1;
       await this.cdp.send("Page.startScreencast", {
         format: "jpeg",
         quality: this.session.currentQuality?.() ?? this.session.quality ?? JPEG_QUALITY,
-        maxWidth: this.width,
-        maxHeight: this.height,
+        maxWidth: Math.max(200, Math.round(this.width * scale)),
+        maxHeight: Math.max(200, Math.round(this.height * scale)),
         everyNthFrame: 1,
       });
       this.casting = true;

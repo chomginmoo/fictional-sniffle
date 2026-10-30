@@ -17,8 +17,11 @@ let frameH = 0;
 let rafPending = false;
 let resizeTimer = null;
 
-// render scale from the performance mode (1 = full, <1 = fewer pixels)
-let renderScale = 1;
+// The page viewport size we last told the server (= our CSS size). Capture
+// scale is handled server-side and does NOT change this, so switching perf
+// mode never resizes/reflows the page.
+let viewportW = 0;
+let viewportH = 0;
 
 // newest-raw-buffer decode pipeline
 let pendingBuffer = null; // most recent undecoded frame
@@ -32,15 +35,12 @@ export function init(canvasEl) {
   window.addEventListener("resize", scheduleResize);
 }
 
-export function setScale(scale) {
-  renderScale = Math.max(0.3, Math.min(1, scale));
-  sendResize();
-}
-
 export function sendResize() {
   if (!canvas) return;
-  const w = Math.max(200, Math.round(canvas.clientWidth * renderScale));
-  const h = Math.max(200, Math.round(canvas.clientHeight * renderScale));
+  const w = Math.max(200, Math.round(canvas.clientWidth));
+  const h = Math.max(200, Math.round(canvas.clientHeight));
+  viewportW = w;
+  viewportH = h;
   send({ t: "resize", w, h, dpr: 1 });
 }
 
@@ -49,14 +49,14 @@ function scheduleResize() {
   resizeTimer = setTimeout(sendResize, 150);
 }
 
-// Map a pointer event on the canvas to remote page coordinates. The frame is
-// rendered at renderScale, so frameW/rect.width already carries that scale.
+// Map a pointer event on the canvas to remote PAGE coordinates. Coordinates are
+// in the page viewport space (= our CSS size), independent of capture scale.
 export function toRemoteCoords(ev) {
   const rect = canvas.getBoundingClientRect();
   const cssX = ev.clientX - rect.left;
   const cssY = ev.clientY - rect.top;
-  const sx = frameW && rect.width ? frameW / rect.width : 1;
-  const sy = frameH && rect.height ? frameH / rect.height : 1;
+  const sx = viewportW && rect.width ? viewportW / rect.width : 1;
+  const sy = viewportH && rect.height ? viewportH / rect.height : 1;
   return { x: Math.round(cssX * sx), y: Math.round(cssY * sy) };
 }
 

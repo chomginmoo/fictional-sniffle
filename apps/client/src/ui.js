@@ -3,7 +3,7 @@
 // textContent / value — never innerHTML — so a hostile page title cannot
 // inject markup.
 import { send } from "./connection.js";
-import { setScale } from "./viewer.js";
+import { sendResize } from "./viewer.js";
 
 let el = {};
 let addressEditing = false;
@@ -184,11 +184,12 @@ export function focusSink() {
   document.getElementById("sink").focus({ preventScroll: true });
 }
 
-// Apply the current performance mode: tell the server the quality/fps and set
-// the client render scale (which also drives the resize message).
+// Apply the current performance mode. Scale is a CAPTURE-resolution setting sent
+// to the server; it does NOT change the page viewport, so the page never resizes
+// when you switch 선명/보통/절약 (only sharpness/frame rate change).
 export function applyPerf() {
   const m = PERF_MODES[perfIndex];
   el.perf.textContent = m.name;
-  send({ t: "perf", quality: m.quality, fps: m.fps });
-  setScale(m.scale);
+  send({ t: "perf", quality: m.quality, fps: m.fps, scale: m.scale });
+  sendResize();
 }

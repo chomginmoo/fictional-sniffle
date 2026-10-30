@@ -147,7 +147,8 @@ DOMAIN=my.duckdns.org APP_PASSWORD='강한-비밀번호' docker compose up -d
 기본은 JPEG 프레임 모드예요. **`STREAM_MODE=video`**로 켜면 스트리밍 방식이 바뀝니다:
 
 - 헤드풀 Chromium을 **가상 디스플레이(Xvfb)** 위에서 실행하고, **ffmpeg**로 화면을
-  **H.264** 저지연 조각 MP4로 인코딩 → 브라우저가 **MediaSource**로 재생. **소리는 없어요(영상 전용).**
+  **H.264(Annex-B)**로 인코딩 → 브라우저가 **WebCodecs로 디코딩해 캔버스에 그림**
+  (JPEG 모드와 같은 캔버스 경로; `<video>`/`blob:` 미사용). **소리는 없어요(영상 전용).**
 - **부드러운 영상**이 돼요(유튜브 등 화면). 입력은 그대로 CDP로 주입.
 - 필요 패키지: `xvfb ffmpeg` (devcontainer/Docker에 포함).
 

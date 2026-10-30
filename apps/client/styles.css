@@ -187,8 +187,9 @@ body {
   outline: none;
   touch-action: none;
 }
+canvas.screen,
 video.screen {
-  object-fit: contain;
+  object-fit: contain; /* letterbox the fixed 16:9 video within the stage */
   background: #000;
 }
 /* keyboard/IME sink sits under the canvas, invisible but focusable */

@@ -31,10 +31,14 @@ let viewportH = 0;
 let pendingBuffer = null;
 let decoding = false;
 
-// MSE (video mode)
-let mediaSource = null;
-let sourceBuffer = null;
-const appendQueue = [];
+// WebCodecs (video mode): decode H.264 straight to the canvas. No <video> /
+// blob: URL — some managed Chrome policies reject those media loads with a
+// "URL safety check", but the canvas path (same as JPEG mode) is allowed.
+let decoder = null;
+let nalBuffer = new Uint8Array(0);
+let gotKey = false;
+let videoTs = 0;
+const VIDEO_FRAME_US = 1000000 / 30;
 let videoBytes = 0;
 let statusCb = null;
 
@@ -99,77 +103,35 @@ export function toRemoteCoords(ev) {
   return { x, y };
 }
 
-// ---- video mode (MediaSource), VIDEO-ONLY ----
+// ---- video mode: WebCodecs H.264 -> canvas (VIDEO-ONLY, no media element) ----
 export function initVideo({ width, height, codec }) {
   mode = "video";
   viewportW = width;
   viewportH = height;
-  surfaceEl = videoEl;
+  surfaceEl = canvas; // video draws into the SAME canvas as JPEG mode
   videoBytes = 0;
-  canvas.classList.add("hidden");
-  videoEl.classList.remove("hidden");
+  gotKey = false;
+  nalBuffer = new Uint8Array(0);
+  videoTs = 0;
+  videoEl?.classList.add("hidden");
+  canvas.classList.remove("hidden");
 
-  // No audio track, so autoplay works; keep muted to guarantee it.
-  videoEl.muted = true;
-  videoEl.playsInline = true;
-  videoEl.addEventListener("canplay", () => tryPlay(), { once: true });
-  videoEl.addEventListener("playing", () => status(""), { once: true });
-  videoEl.addEventListener("error", () => {
-    const e = videoEl.error;
-    const names = { 1: "ABORTED", 2: "NETWORK", 3: "DECODE", 4: "SRC_NOT_SUPPORTED" };
-    status(
-      "영상 오류: " + (names[e?.code] || e?.code || "?") + (e?.message ? " — " + e.message : ""),
-    );
-  });
-
-  const type = `video/mp4; codecs="${codec}"`;
-  if (window.MediaSource && !MediaSource.isTypeSupported(type)) {
-    status("이 브라우저가 영상 코덱을 지원하지 않습니다: " + codec);
+  if (!("VideoDecoder" in window)) {
+    status("이 브라우저는 WebCodecs(영상 디코딩)를 지원하지 않습니다");
+    return;
   }
-
-  mediaSource = new MediaSource();
-  let opened = false;
-  mediaSource.addEventListener("sourceopen", () => {
-    opened = true;
-    try {
-      sourceBuffer = mediaSource.addSourceBuffer(type);
-      // Default "segments" mode: fragmented MP4 carries its own timestamps, so
-      // forcing "sequence" can corrupt the timeline and cause DECODE errors.
-      sourceBuffer.addEventListener("updateend", flushVideo);
-      sourceBuffer.addEventListener("error", () => status("영상 버퍼 오류 (SourceBuffer)"));
-      flushVideo(); // append anything that queued before sourceopen
-    } catch (e) {
-      status("영상 초기화 실패: " + (e.message || e));
-    }
-  });
-
-  // Prefer srcObject (no blob: URL). Some managed Chrome policies reject blob
-  // media loads with "Media load rejected by URL safety check"; srcObject
-  // attaches the MediaSource directly and avoids minting a URL at all.
-  attachMediaSource();
-  function attachMediaSource() {
-    let usedSrcObject = false;
-    try {
-      videoEl.srcObject = mediaSource;
-      usedSrcObject = true;
-    } catch {
-      videoEl.src = URL.createObjectURL(mediaSource);
-    }
-    tryPlay();
-    // If srcObject isn't honored (no sourceopen shortly), fall back to a blob URL.
-    if (usedSrcObject) {
-      setTimeout(() => {
-        if (!opened) {
-          try {
-            videoEl.srcObject = null;
-          } catch {
-            /* ignore */
-          }
-          videoEl.src = URL.createObjectURL(mediaSource);
-          tryPlay();
-        }
-      }, 1200);
-    }
+  try {
+    decoder = new VideoDecoder({
+      output: (frame) => {
+        drawVideoFrame(frame);
+        frame.close();
+      },
+      error: (e) => status("영상 디코더 오류: " + (e.message || e)),
+    });
+    decoder.configure({ codec, optimizeForLatency: true });
+  } catch (e) {
+    status("영상 디코더 초기화 실패: " + (e.message || e));
+    return;
   }
 
   // Diagnostics: if no bytes arrive, the problem is server-side (ffmpeg/Xvfb).
@@ -180,62 +142,88 @@ export function initVideo({ width, height, codec }) {
   }, 5000);
 }
 
+function drawVideoFrame(frame) {
+  const w = frame.displayWidth || frame.codedWidth;
+  const h = frame.displayHeight || frame.codedHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  try {
+    ctx.drawImage(frame, 0, 0);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function onVideoChunk(payload) {
   videoBytes += payload.byteLength;
-  appendQueue.push(new Uint8Array(payload));
-  flushVideo();
+  if (!decoder || decoder.state !== "configured") return;
+
+  // accumulate and split into access units at AUD (NAL type 9) boundaries
+  const chunk = new Uint8Array(payload);
+  const merged = new Uint8Array(nalBuffer.length + chunk.length);
+  merged.set(nalBuffer, 0);
+  merged.set(chunk, nalBuffer.length);
+  nalBuffer = merged;
+
+  const auds = findAuds(nalBuffer);
+  if (auds.length < 2) return; // need at least one complete access unit
+  for (let i = 0; i < auds.length - 1; i++) {
+    feedAccessUnit(nalBuffer.subarray(auds[i], auds[i + 1]));
+  }
+  nalBuffer = nalBuffer.slice(auds[auds.length - 1]); // keep trailing partial AU
 }
 
-function flushVideo() {
-  if (!sourceBuffer || sourceBuffer.updating || appendQueue.length === 0) return;
-  // concatenate pending chunks into one append
-  let total = 0;
-  for (const c of appendQueue) total += c.byteLength;
-  const merged = new Uint8Array(total);
-  let off = 0;
-  for (const c of appendQueue) {
-    merged.set(c, off);
-    off += c.byteLength;
+// Byte offsets of AUD NAL units (start code + NAL type 9).
+function findAuds(b) {
+  const pos = [];
+  for (let i = 0; i + 4 < b.length; i++) {
+    if (b[i] !== 0 || b[i + 1] !== 0) continue;
+    let sc = 0;
+    if (b[i + 2] === 1) sc = 3;
+    else if (b[i + 2] === 0 && b[i + 3] === 1) sc = 4;
+    if (sc && (b[i + sc] & 0x1f) === 9) pos.push(i);
   }
-  appendQueue.length = 0;
+  return pos;
+}
+
+function hasNalType(b, t) {
+  for (let i = 0; i + 4 < b.length; i++) {
+    if (b[i] !== 0 || b[i + 1] !== 0) continue;
+    let sc = 0;
+    if (b[i + 2] === 1) sc = 3;
+    else if (b[i + 2] === 0 && b[i + 3] === 1) sc = 4;
+    if (sc && (b[i + sc] & 0x1f) === t) return true;
+  }
+  return false;
+}
+
+function feedAccessUnit(au) {
+  const isKey = hasNalType(au, 5) || hasNalType(au, 7); // IDR or SPS
+  // Under overload, drop non-key frames and resync at the next keyframe so
+  // latency can't snowball on a weak device.
+  if (decoder.decodeQueueSize > 40 && !isKey) {
+    gotKey = false;
+    return;
+  }
+  if (!gotKey) {
+    if (!isKey) return; // decoding must start on a keyframe
+    gotKey = true;
+  }
   try {
-    sourceBuffer.appendBuffer(merged);
+    decoder.decode(
+      new EncodedVideoChunk({
+        type: isKey ? "key" : "delta",
+        timestamp: videoTs,
+        data: au.slice(), // copy out of the shared buffer
+      }),
+    );
+    videoTs += VIDEO_FRAME_US;
   } catch (e) {
-    // QuotaExceeded: trim and retry next tick
-    trimBuffer();
+    status("디코드 실패: " + (e.message || e));
+    gotKey = false; // resync at next keyframe
   }
-  keepLive();
-}
-
-function trimBuffer() {
-  try {
-    const b = videoEl.buffered;
-    if (b.length && !sourceBuffer.updating) {
-      const start = b.start(0);
-      const cut = Math.min(videoEl.currentTime - 2, b.end(b.length - 1) - 1);
-      if (cut > start + 1) sourceBuffer.remove(start, cut);
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-function keepLive() {
-  try {
-    const b = videoEl.buffered;
-    if (!b.length) return;
-    const end = b.end(b.length - 1);
-    // if we've drifted behind the live edge, jump forward
-    if (end - videoEl.currentTime > 1.2) videoEl.currentTime = end - 0.25;
-    trimBuffer();
-  } catch {
-    /* ignore */
-  }
-}
-
-function tryPlay() {
-  const p = videoEl.play?.();
-  if (p && p.catch) p.catch(() => {}); // muted autoplay should succeed; ignore
 }
 
 // Called for every incoming binary frame. We only keep the newest buffer and
@@ -298,16 +286,14 @@ export function clear() {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  if (mode === "video" && videoEl) {
+  if (mode === "video") {
     try {
-      videoEl.pause();
-      videoEl.removeAttribute("src");
-      videoEl.load();
+      if (decoder && decoder.state !== "closed") decoder.close();
     } catch {
       /* ignore */
     }
-    sourceBuffer = null;
-    mediaSource = null;
-    appendQueue.length = 0;
+    decoder = null;
+    nalBuffer = new Uint8Array(0);
+    gotKey = false;
   }
 }

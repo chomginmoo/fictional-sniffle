@@ -50,17 +50,21 @@ export function codecString() {
 // Spawn ffmpeg capturing the display -> fragmented MP4 on stdout.
 // onChunk(Buffer) is called per output chunk (in order); onClose(code) on exit.
 export function startFfmpeg({ display, width, height, fps = VIDEO_FPS, onChunk, onClose, onError }) {
+  // Annex-B H.264 elementary stream (not MP4): the client decodes it with
+  // WebCodecs and draws to a canvas, avoiding the <video>/blob media load that
+  // managed Chrome can block with a "URL safety check".
+  // aud=1 inserts Access Unit Delimiters so the client can split frames.
   const args = [
     "-hide_banner", "-loglevel", "error",
     "-f", "x11grab", "-draw_mouse", "0", "-framerate", String(fps),
     "-video_size", `${width}x${height}`, "-i", display,
     "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
     "-profile:v", "baseline", "-level:v", "3.1", "-pix_fmt", "yuv420p",
-    "-g", String(fps), "-keyint_min", String(fps), // keyframe every ~1s for MSE robustness
+    "-g", String(fps), "-keyint_min", String(fps), // keyframe every ~1s
     "-b:v", VIDEO_BITRATE, "-maxrate", VIDEO_BITRATE, "-bufsize", "1M",
-    "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
-    "-frag_duration", "100000", // ~100ms fragments for low latency
-    "-f", "mp4", "pipe:1",
+    "-x264-params", "aud=1",
+    "-bsf:v", "dump_extra", // repeat SPS/PPS before keyframes (reconnect safety)
+    "-f", "h264", "pipe:1",
   ];
   const ff = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   ff.stdout.on("data", onChunk);

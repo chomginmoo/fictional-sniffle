@@ -34,6 +34,11 @@ export async function launchBrowser() {
       "--disable-background-networking",
       "--disable-sync",
       "--disable-breakpad", // no crash dumps
+      // Disable GPU/SwiftShader: on constrained cloud CPUs the software GL can
+      // hit unsupported SIMD instructions and crash with SIGILL. Headless
+      // rendering doesn't need it.
+      "--disable-gpu",
+      "--disable-software-rasterizer",
       "--enable-smooth-scrolling", // animate wheel scroll so it streams smoother
       "--disable-features=Translate,MediaRouter",
     ],

@@ -3,11 +3,21 @@
 // textContent / value — never innerHTML — so a hostile page title cannot
 // inject markup.
 import { send } from "./connection.js";
+import { setScale } from "./viewer.js";
 
 let el = {};
 let addressEditing = false;
 let toastTimer = null;
 let pendingDialogId = null;
+
+// Performance presets. "보통" is the default — tuned for a weak Chromebook:
+// fewer rendered pixels (scale), lower JPEG quality, capped frame rate.
+const PERF_MODES = [
+  { name: "선명", scale: 1.0, quality: 80, fps: 24 },
+  { name: "보통", scale: 0.85, quality: 55, fps: 18 },
+  { name: "절약", scale: 0.6, quality: 38, fps: 12 },
+];
+let perfIndex = 1;
 
 export function init() {
   el = {
@@ -22,6 +32,7 @@ export function init() {
     reload: document.getElementById("reload"),
     address: document.getElementById("address"),
     newtab: document.getElementById("newtab"),
+    perf: document.getElementById("perf"),
     burn: document.getElementById("burn"),
     progress: document.getElementById("progress"),
     dialog: document.getElementById("dialog"),
@@ -36,6 +47,25 @@ export function init() {
   el.forward.addEventListener("click", () => send({ t: "nav", op: "forward" }));
   el.reload.addEventListener("click", () => send({ t: "nav", op: "reload" }));
   el.newtab.addEventListener("click", () => send({ t: "tab", op: "new" }));
+
+  // restore saved performance mode
+  try {
+    const saved = Number(localStorage.getItem("perfIndex"));
+    if (saved >= 0 && saved < PERF_MODES.length) perfIndex = saved;
+  } catch {
+    /* storage may be unavailable */
+  }
+  el.perf.textContent = PERF_MODES[perfIndex].name;
+  el.perf.addEventListener("click", () => {
+    perfIndex = (perfIndex + 1) % PERF_MODES.length;
+    try {
+      localStorage.setItem("perfIndex", String(perfIndex));
+    } catch {
+      /* ignore */
+    }
+    applyPerf();
+    toast(`성능 모드: ${PERF_MODES[perfIndex].name}`);
+  });
   el.burn.addEventListener("click", () => {
     if (confirm("현재 세션을 파기할까요? 모든 탭이 닫힙니다.")) send({ t: "burn" });
   });
@@ -151,4 +181,13 @@ export function toast(msg) {
 
 export function focusSink() {
   document.getElementById("sink").focus({ preventScroll: true });
+}
+
+// Apply the current performance mode: tell the server the quality/fps and set
+// the client render scale (which also drives the resize message).
+export function applyPerf() {
+  const m = PERF_MODES[perfIndex];
+  el.perf.textContent = m.name;
+  send({ t: "perf", quality: m.quality, fps: m.fps });
+  setScale(m.scale);
 }

@@ -25,6 +25,9 @@ export class Session {
     this.nextDialogId = 1;
     this.width = 1280;
     this.height = 720;
+    // performance knobs (client can change via a "perf" message)
+    this.quality = Number(process.env.JPEG_QUALITY || 60);
+    this.fps = Number(process.env.MAX_FPS || 20);
     this.idleTimer = null;
     this.graceTimer = null;
     this.dead = false;
@@ -225,6 +228,11 @@ export class Session {
         break;
       case "dialog":
         await this.respondDialog(m.id, m.accept, m.text);
+        break;
+      case "perf":
+        this.quality = m.quality;
+        this.fps = m.fps;
+        if (this.active) await this.active.startCast(); // re-apply quality
         break;
       case "ack":
         break; // frame acks are advisory; bufferedAmount is the real signal

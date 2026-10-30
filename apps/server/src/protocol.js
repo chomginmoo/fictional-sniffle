@@ -140,6 +140,13 @@ export function parseClientMessage(raw) {
         text: typeof m.text === "string" ? m.text.slice(0, 4096) : "",
       };
 
+    case "perf":
+      return {
+        t: "perf",
+        quality: isInt(m.quality) ? clampInt(m.quality, 20, 90) : 60,
+        fps: isInt(m.fps) ? clampInt(m.fps, 1, 30) : 20,
+      };
+
     case "ack":
       return { t: "ack", frame: isInt(m.frame) ? m.frame >>> 0 : 0 };
 

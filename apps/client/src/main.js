@@ -24,7 +24,7 @@ conn.setHandlers({
       case "hello":
         ui.showBrowser();
         privacy.setConnected(true);
-        viewer.sendResize();
+        ui.applyPerf(); // sends perf (quality/fps) + scale + initial resize
         ui.focusSink();
         break;
       case "state":

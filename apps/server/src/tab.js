@@ -31,6 +31,12 @@ export class Tab {
         /* tab closing */
       }
       if (!this.casting) return;
+      // throttle to the session's target fps (we still ack every frame above so
+      // Chromium keeps capturing; we just forward fewer to the weak client).
+      const now = Date.now();
+      const minInterval = 1000 / (this.session.fps || 20);
+      if (now - (this._lastSent || 0) < minInterval) return;
+      this._lastSent = now;
       const bytes = Buffer.from(f.data, "base64");
       const w = f.metadata.deviceWidth || this.width;
       const h = f.metadata.deviceHeight || this.height;
@@ -106,10 +112,20 @@ export class Tab {
 
   async startCast() {
     if (!this.cdp) return;
+    // If already casting (e.g. a quality/viewport change), restart so Chromium
+    // emits a fresh frame with the new settings instead of silently ignoring
+    // the second start.
+    if (this.casting) {
+      try {
+        await this.cdp.send("Page.stopScreencast");
+      } catch {
+        /* ignore */
+      }
+    }
     try {
       await this.cdp.send("Page.startScreencast", {
         format: "jpeg",
-        quality: JPEG_QUALITY,
+        quality: this.session.quality ?? JPEG_QUALITY,
         maxWidth: this.width,
         maxHeight: this.height,
         everyNthFrame: 1,

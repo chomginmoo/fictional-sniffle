@@ -166,12 +166,12 @@ function flushVideo() {
     sourceBuffer.appendBuffer(merged);
   } catch (e) {
     // QuotaExceeded: trim and retry next tick
-    trimBuffer(true);
+    trimBuffer();
   }
   keepLive();
 }
 
-function trimBuffer(force) {
+function trimBuffer() {
   try {
     const b = videoEl.buffered;
     if (b.length && !sourceBuffer.updating) {
@@ -191,7 +191,7 @@ function keepLive() {
     const end = b.end(b.length - 1);
     // if we've drifted behind the live edge, jump forward
     if (end - videoEl.currentTime > 1.2) videoEl.currentTime = end - 0.25;
-    trimBuffer(false);
+    trimBuffer();
   } catch {
     /* ignore */
   }

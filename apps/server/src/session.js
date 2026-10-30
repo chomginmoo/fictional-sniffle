@@ -93,7 +93,6 @@ export class Session {
       display: env.display,
       width: env.width,
       height: env.height,
-      fps: this.fps,
       onChunk: (buf) => this.sendVideo(buf),
       onClose: (code) => {
         if (!this.dead) this.send({ t: "err", message: "영상 인코더 종료됨 (ffmpeg exit " + code + ")" });
@@ -252,8 +251,17 @@ export class Session {
     const prev = this.active;
     if (prev && prev.id !== id) await prev.stopCast();
     this.activeId = id;
-    await next.setViewport(this.width, this.height);
-    await next.startCast();
+    if (this.video) {
+      // ffmpeg captures the whole display, so the chosen tab must be frontmost.
+      try {
+        await next.page.bringToFront();
+      } catch {
+        /* ignore */
+      }
+    } else {
+      await next.setViewport(this.width, this.height);
+      await next.startCast();
+    }
     next.emitState();
     this.emitTabs();
   }
@@ -319,11 +327,11 @@ export class Session {
         if (this.active) await this.active.nav(m.op);
         break;
       case "wheel":
-        this.noteMotion(); // scrolling -> motion quality for smoothness
+        if (!this.video) this.noteMotion(); // jpeg motion-adaptive quality
         if (this.active) await this.active.input(m);
         break;
       case "mouse":
-        if (m.op === "move") this.noteMotion();
+        if (!this.video && m.op === "move") this.noteMotion();
         if (this.active) await this.active.input(m);
         break;
       case "key":

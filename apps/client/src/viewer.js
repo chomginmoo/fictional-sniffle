@@ -128,7 +128,9 @@ export function initVideo({ width, height, codec }) {
   }
 
   mediaSource = new MediaSource();
+  let opened = false;
   mediaSource.addEventListener("sourceopen", () => {
+    opened = true;
     try {
       sourceBuffer = mediaSource.addSourceBuffer(type);
       // Default "segments" mode: fragmented MP4 carries its own timestamps, so
@@ -140,8 +142,35 @@ export function initVideo({ width, height, codec }) {
       status("영상 초기화 실패: " + (e.message || e));
     }
   });
-  videoEl.src = URL.createObjectURL(mediaSource);
-  tryPlay();
+
+  // Prefer srcObject (no blob: URL). Some managed Chrome policies reject blob
+  // media loads with "Media load rejected by URL safety check"; srcObject
+  // attaches the MediaSource directly and avoids minting a URL at all.
+  attachMediaSource();
+  function attachMediaSource() {
+    let usedSrcObject = false;
+    try {
+      videoEl.srcObject = mediaSource;
+      usedSrcObject = true;
+    } catch {
+      videoEl.src = URL.createObjectURL(mediaSource);
+    }
+    tryPlay();
+    // If srcObject isn't honored (no sourceopen shortly), fall back to a blob URL.
+    if (usedSrcObject) {
+      setTimeout(() => {
+        if (!opened) {
+          try {
+            videoEl.srcObject = null;
+          } catch {
+            /* ignore */
+          }
+          videoEl.src = URL.createObjectURL(mediaSource);
+          tryPlay();
+        }
+      }, 1200);
+    }
+  }
 
   // Diagnostics: if no bytes arrive, the problem is server-side (ffmpeg/Xvfb).
   setTimeout(() => {

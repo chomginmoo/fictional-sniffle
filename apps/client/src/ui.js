@@ -184,6 +184,22 @@ export function focusSink() {
   document.getElementById("sink").focus({ preventScroll: true });
 }
 
+// On a lean host (Render free), default to 절약 unless the user already picked
+// a mode before. Respects an existing saved choice.
+export function applyLeanDefault(lean) {
+  if (!lean) return;
+  let hasSaved = false;
+  try {
+    hasSaved = localStorage.getItem("perfIndex") != null;
+  } catch {
+    /* ignore */
+  }
+  if (!hasSaved) {
+    perfIndex = PERF_MODES.length - 1; // 절약
+    el.perf.textContent = PERF_MODES[perfIndex].name;
+  }
+}
+
 // Apply the current performance mode. Scale is a CAPTURE-resolution setting sent
 // to the server; it does NOT change the page viewport, so the page never resizes
 // when you switch 선명/보통/절약 (only sharpness/frame rate change).

@@ -82,7 +82,21 @@ APP_PASSWORD='강한-비밀번호' npm start
 
 > Codespaces 컨테이너는 임시입니다. 변경한 코드는 꼭 커밋·푸시하세요.
 
-## 2. 집에서 상시 사용 (Oracle Cloud Always Free 등)
+## 2. 가장 편한 접속: Render 무료 배포 (무카드)
+
+고정 공개 주소(`https://앱.onrender.com`)를 **북마크 → 비밀번호 → 사용**. GitHub 로그인·포트
+설정이 필요 없습니다. `render.yaml`(Blueprint)이 설정을 자동으로 잡아줍니다.
+
+1. [Render](https://render.com) 가입(카드 불필요) → **New → Blueprint** → 이 저장소 연결.
+2. `APP_PASSWORD`에 강한 비밀번호 입력 → Deploy.
+3. 나온 주소를 **북마크**하고 열어서 로그인.
+
+- **가벼운 모드(`LEAN=true`)로 동작**: 512MB/0.1CPU에 맞춰 단일 탭·낮은 해상도·절약 화질로
+  제한됩니다. 가벼운 사이트엔 충분하지만 **느리고**, 무거운 사이트·멀티탭은 불안정할 수 있어요(OOM).
+- **15분 유휴 시 슬립** → 다음에 열 때 **첫 로딩 ~1분**(버튼 없이 자동으로 깨어남). 월 750시간 무료.
+- 리전은 `singapore`(한국에서 가장 가까움). 첫 Docker 빌드는 이미지가 커서 몇 분 걸릴 수 있어요(1회).
+
+## 3. 집에서 상시 사용 (Oracle Cloud Always Free 등)
 
 ```bash
 # VM에서 (Docker + Compose 설치 후)
@@ -109,6 +123,8 @@ DOMAIN=my.duckdns.org APP_PASSWORD='강한-비밀번호' docker compose up -d
 | `START_URL` | DuckDuckGo | 시작 페이지 |
 | `CHROMIUM_SANDBOX` | true | Chromium 샌드박스. 컨테이너에서 못 켜면 `false`(권장은 seccomp로 켜두기) |
 | `PW_EXECUTABLE_PATH` | (자동) | Chromium 실행 파일 수동 지정(보통 불필요) |
+| `LEAN` | false | 작은 호스트(Render 무료 등)용 절약 모드: 단일 탭, 해상도 상한, 화질/프레임·유휴시간 축소 |
+| `LEAN_MAX_W`/`LEAN_MAX_H` | 1024/768 | LEAN일 때 뷰포트 상한 |
 
 ### 브라우저가 시작되지 않을 때 (`브라우저 시작 실패`)
 

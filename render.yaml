@@ -1,0 +1,32 @@
+# Render Blueprint — deploy the render server as a free web service.
+# In Render: New → Blueprint → connect this repo. Then set APP_PASSWORD.
+#
+# Notes:
+# - Free plan is 512MB RAM / 0.1 CPU and sleeps after ~15 min idle (first open
+#   after sleep takes ~1 min to wake). LEAN=true keeps Chromium within budget.
+# - Region "singapore" is the closest Render region to Korea (lower latency).
+# - ALLOWED_ORIGINS is intentionally not set: the server falls back to allowing
+#   the same-origin request host, which is correct for the onrender.com URL.
+services:
+  - type: web
+    name: private-browser
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: APP_PASSWORD
+        sync: false # set this yourself in the Render dashboard (a strong secret)
+      - key: LEAN
+        value: "true"
+      - key: CHROMIUM_SANDBOX
+        value: "false"
+      - key: HEADLESS
+        value: "true"
+      - key: TZ
+        value: Asia/Seoul
+      - key: LOCALE
+        value: ko-KR

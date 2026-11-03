@@ -9,7 +9,14 @@ import { Tab } from "./tab.js";
 import { navigationAllowed, startPage } from "./urlPolicy.js";
 import { encodeFrameHeader } from "./protocol.js";
 
-const IDLE_MS = Number(process.env.IDLE_MS || 15 * 60_000);
+// LEAN mode: for tiny hosts (e.g. Render free: 512MB / 0.1 CPU). Caps memory
+// and CPU use — single tab, lower resolution, lower quality/fps, shorter idle.
+// Off by default, so Codespaces/local keep the full experience.
+const LEAN = process.env.LEAN === "true";
+const LEAN_MAX_W = Number(process.env.LEAN_MAX_W || 1024);
+const LEAN_MAX_H = Number(process.env.LEAN_MAX_H || 768);
+
+const IDLE_MS = Number(process.env.IDLE_MS || (LEAN ? 5 : 15) * 60_000);
 const GRACE_MS = Number(process.env.GRACE_MS || 60_000);
 // Drop frames while the socket is this far behind. Kept small so scroll frames
 // don't queue up and add latency (the client only ever draws the newest frame).
@@ -27,10 +34,11 @@ export class Session {
     this.nextDialogId = 1;
     this.width = 1280;
     this.height = 720;
+    this.lean = LEAN;
     // performance knobs (client can change via a "perf" message)
-    this.quality = Number(process.env.JPEG_QUALITY || 60);
-    this.fps = Number(process.env.MAX_FPS || 24);
-    this.motionFps = Number(process.env.MOTION_FPS || 40); // more frames while moving
+    this.quality = Number(process.env.JPEG_QUALITY || (LEAN ? 45 : 60));
+    this.fps = Number(process.env.MAX_FPS || (LEAN ? 18 : 24));
+    this.motionFps = Number(process.env.MOTION_FPS || (LEAN ? 24 : 40)); // more frames while moving
     // Capture-resolution scale. Applied ONLY to the screencast image size, NOT
     // the page viewport — so changing perf mode never reflows the web page.
     this.captureScale = 1;
@@ -61,7 +69,7 @@ export class Session {
     await tab.startCast();
     await tab.navigate(startPage);
     this.resetIdle();
-    this.send({ t: "hello" });
+    this.send({ t: "hello", lean: this.lean });
   }
 
   async _installRouteGuard() {
@@ -83,6 +91,23 @@ export class Session {
   }
 
   async adoptPopup(page) {
+    if (LEAN) {
+      // Single-tab: don't keep the popup page around (memory). Navigate the
+      // current tab to the popup's target instead, then discard the popup.
+      let url = "";
+      try {
+        url = page.url();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await page.close();
+      } catch {
+        /* ignore */
+      }
+      if (/^https?:/i.test(url) && this.active) await this.active.navigate(url);
+      return;
+    }
     const tab = await this._makeTab(page);
     await this.switchTab(tab.id);
     this.emitTabs();
@@ -166,6 +191,10 @@ export class Session {
   }
 
   async setViewport(w, h) {
+    if (LEAN) {
+      w = Math.min(w, LEAN_MAX_W); // cap resolution to save memory/CPU
+      h = Math.min(h, LEAN_MAX_H);
+    }
     this.width = w;
     this.height = h;
     const a = this.active;
@@ -173,6 +202,10 @@ export class Session {
   }
 
   async newTab() {
+    if (LEAN) {
+      this.send({ t: "err", message: "가벼운 모드에선 탭 1개만 사용해요." });
+      return;
+    }
     const tab = await this._makeTab();
     await this.switchTab(tab.id);
     await tab.navigate(startPage);
@@ -273,8 +306,10 @@ export class Session {
         await this.respondDialog(m.id, m.accept, m.text);
         break;
       case "perf":
-        this.quality = m.quality;
-        this.fps = m.fps;
+        // In LEAN mode cap quality/fps so the client can't push a tiny host
+        // (e.g. Render free) past what it can handle.
+        this.quality = LEAN ? Math.min(m.quality, 55) : m.quality;
+        this.fps = LEAN ? Math.min(m.fps, 20) : m.fps;
         this.captureScale = m.scale ?? 1;
         if (this.active) await this.active.startCast(); // re-apply quality/scale
         break;

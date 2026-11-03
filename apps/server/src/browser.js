@@ -22,25 +22,39 @@ const SANDBOX = (process.env.CHROMIUM_SANDBOX || "true") !== "false";
 // where the matching browser isn't where Playwright expects it.
 const EXECUTABLE_PATH = process.env.PW_EXECUTABLE_PATH || undefined;
 
+// LEAN: trim memory/CPU for tiny hosts (Render free: 512MB / 0.1 CPU).
+const LEAN = process.env.LEAN === "true";
+
 export async function launchBrowser() {
+  const disableFeatures = ["Translate", "MediaRouter"];
+  const args = [
+    "--disable-dev-shm-usage", // we size /dev/shm ourselves; avoid crashes
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-background-networking",
+    "--disable-sync",
+    "--disable-breakpad", // no crash dumps
+    // Disable GPU/SwiftShader: on constrained cloud CPUs the software GL can
+    // hit unsupported SIMD instructions and crash with SIGILL.
+    "--disable-gpu",
+    "--disable-software-rasterizer",
+    "--enable-smooth-scrolling", // animate wheel scroll so it streams smoother
+  ];
+  if (LEAN) {
+    args.push(
+      "--renderer-process-limit=1", // one renderer -> much less RAM
+      "--disable-extensions",
+      "--disable-background-timer-throttling",
+      "--js-flags=--max-old-space-size=256", // cap V8 heap
+    );
+    disableFeatures.push("site-per-process"); // no per-iframe processes
+  }
+  args.push(`--disable-features=${disableFeatures.join(",")}`);
   const browser = await chromium.launch({
     headless: HEADLESS,
     chromiumSandbox: SANDBOX,
     executablePath: EXECUTABLE_PATH,
-    args: [
-      "--disable-dev-shm-usage", // we size /dev/shm ourselves; avoid crashes
-      "--no-first-run",
-      "--no-default-browser-check",
-      "--disable-background-networking",
-      "--disable-sync",
-      "--disable-breakpad", // no crash dumps
-      // Disable GPU/SwiftShader: on constrained cloud CPUs the software GL can
-      // hit unsupported SIMD instructions and crash with SIGILL.
-      "--disable-gpu",
-      "--disable-software-rasterizer",
-      "--enable-smooth-scrolling", // animate wheel scroll so it streams smoother
-      "--disable-features=Translate,MediaRouter",
-    ],
+    args,
   });
   return browser;
 }

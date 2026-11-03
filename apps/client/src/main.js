@@ -25,6 +25,7 @@ conn.setHandlers({
       case "hello":
         ui.showBrowser();
         privacy.setConnected(true);
+        ui.applyLeanDefault(m.lean); // on a tiny host, default to 절약
         ui.applyPerf(); // sends perf (quality/fps) + scale + initial resize
         ui.focusSink();
         break;

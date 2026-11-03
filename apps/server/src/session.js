@@ -97,8 +97,13 @@ export class Session {
       let url = "";
       try {
         url = page.url();
+        if (!/^https?:/i.test(url)) {
+          // popup may still be about:blank; wait briefly for it to resolve
+          await page.waitForURL(/^https?:/i, { timeout: 2000 });
+          url = page.url();
+        }
       } catch {
-        /* ignore */
+        /* no resolvable URL */
       }
       try {
         await page.close();

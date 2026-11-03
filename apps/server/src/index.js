@@ -154,7 +154,7 @@ server.on("upgrade", (req, socket, head) => {
     socket.destroy();
     return;
   }
-  if (!originAllowed(req.headers.origin, req.headers.host)) {
+  if (!originAllowed(req.headers.origin, req.headers.host, req.headers["x-forwarded-host"])) {
     socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
     socket.destroy();
     return;

@@ -81,13 +81,18 @@ export function sweepTickets() {
 
 // WebSocket upgrade Origin check. Browsers always send Origin for ws; a
 // missing Origin (non-browser client) is rejected.
-export function originAllowed(origin, host) {
+//
+// `hosts` may include both the Host header and X-Forwarded-Host, because behind
+// a reverse proxy (Render, Caddy, etc.) the public hostname the browser used can
+// arrive in either one. A browser cannot set X-Forwarded-Host itself, so
+// accepting it does not weaken the same-origin check.
+export function originAllowed(origin, ...hosts) {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.length > 0) return ALLOWED_ORIGINS.includes(origin);
-  // Dev fallback: accept same-host origin over http/https.
+  // Fallback: accept when the Origin's host matches the request host.
   try {
     const u = new URL(origin);
-    return u.host === host;
+    return hosts.filter(Boolean).includes(u.host);
   } catch {
     return false;
   }

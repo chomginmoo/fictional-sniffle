@@ -131,12 +131,17 @@ export class Tab {
       // Viewport (this.width/height) is the full client size; the capture scale
       // only shrinks the streamed image, so the page never reflows on perf change.
       const scale = this.session.captureScale ?? 1;
+      // On tiny hosts (LEAN) capture every 2nd compositor frame so Chromium
+      // doesn't JPEG-encode frames we'd only throttle away — real CPU savings
+      // where CPU is scarce (Render 0.1 CPU). Still ~30fps ceiling, above our
+      // forward cap, so motion isn't limited.
+      const everyNthFrame = this.session.lean ? 2 : 1;
       await this.cdp.send("Page.startScreencast", {
         format: "jpeg",
         quality: this.session.currentQuality?.() ?? this.session.quality ?? JPEG_QUALITY,
         maxWidth: Math.max(200, Math.round(this.width * scale)),
         maxHeight: Math.max(200, Math.round(this.height * scale)),
-        everyNthFrame: 1,
+        everyNthFrame,
       });
       this.casting = true;
     } catch {
